@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420" fill="none" className="w-full h-full">
+  <!-- Base Dark Blue Horizontal Bar -->
+  <path d="M165 330 H790 V415 H165 Z" fill="#1D429A" />
+
+  <!-- Middle Green Horizontal Bar with Curved Left Follow-through -->
+  <path d="M535 285 C575 250 605 215 625 200 H790 V285 H535 Z" fill="#00A651" />
+
+  <!-- Upper Dark Blue Horizontal Bar with Curved Left Arc -->
+  <path d="M625 80 C635 120 630 160 620 185 H790 V80 H625 Z" fill="#1D429A" />
+
+  <!-- Main Stylized Orange "P-E" Monogram -->
+  <path fill-rule="evenodd" clip-rule="evenodd" d="
+    M 0 0 
+    H 460 
+    C 620 0 740 100 740 240 
+    C 740 280 725 320 680 345 
+    C 640 370 580 375 530 375 
+    C 450 375 300 375 165 375 
+    V 285 
+    H 480 
+    C 540 285 580 265 580 215 
+    C 580 165 535 105 440 105 
+    H 165 
+    V 375 
+    H 0 
+    V 0 
+    Z
+  " fill="#F15A24" />
+</svg>

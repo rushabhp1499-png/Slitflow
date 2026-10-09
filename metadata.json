@@ -1,0 +1,6 @@
+{
+  "name": "Progressive Enterprises - Slitting & Production Tracker",
+  "description": "Production tracking, slitting entries, live customer updates, estimated delivery scheduling, and delivery challan generation for Progressive Enterprises.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
