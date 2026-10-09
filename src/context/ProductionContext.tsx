@@ -1529,7 +1529,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       job.customerName,
       'bundle_weighed',
       `Bundle ${bundleTag} Weighed: ${newBundle.grossWeightKg} kg Gross (${newBundle.netWeightKg} kg Net)`,
-      `Logged bundle ${bundleTag} (${newBundle.rollsSummary}) on weighing scale. Gross: ${newBundle.grossWeightKg} kg, ${newBundle.coreType === 'paper_core' ? `Paper core tare -${newBundle.paperCoreTareWeightKg}kg deducted` : 'PVC core (no tare)'}. Net: ${newBundle.netWeightKg} kg. Staged ready on floor.`
+      `Logged bundle ${bundleTag} (${newBundle.rollsSummary}) on weighing scale. Gross: ${newBundle.grossWeightKg} kg, Core type: ${newBundle.coreType === 'paper_core' ? 'Paper Tube' : 'Plastic Tube'}. Net: ${newBundle.netWeightKg} kg. Staged ready on floor.`
     );
 
     return newBundle;

@@ -188,18 +188,18 @@ export const EditBundleModal: React.FC<EditBundleModalProps> = ({ jobId, bundle,
               {/* Core Type Selection */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Core Type & Tare Rule:
+                  Core type:
                 </label>
                 <select
                   value={coreType}
                   onChange={(e) => setCoreType(e.target.value as CoreType)}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 bg-white"
                 >
-                  <option value="paper_core">Paper Core (Tare Deducted)</option>
-                  <option value="pvc_core">PVC Core (No Tare Deducted)</option>
+                  <option value="paper_core">Paper Tube</option>
+                  <option value="pvc_core">Plastic Tube</option>
                 </select>
                 <span className="text-[11px] text-slate-400 mt-0.5 block">
-                  Original: {bundle.coreType === 'paper_core' ? 'Paper Core' : 'PVC Core'}
+                  Original: {bundle.coreType === 'paper_core' ? 'Paper Tube' : 'Plastic Tube'}
                 </span>
               </div>
             </div>

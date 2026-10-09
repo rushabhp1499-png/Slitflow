@@ -271,7 +271,7 @@ export function downloadChallanAsHtml(challan: DeliveryChallan, job: MaterialInw
               <th style="width: 32px; text-align: center;">#</th>
               <th>Bundle Tag</th>
               <th>Slitted Specification</th>
-              <th>Core Type & Packaging</th>
+              <th>Core type</th>
               <th class="text-right">Gross Wt (KG)</th>
               <th class="text-right">Tare Wt (KG)</th>
               <th class="text-right">Net Wt (KG)</th>
@@ -283,7 +283,7 @@ export function downloadChallanAsHtml(challan: DeliveryChallan, job: MaterialInw
                 <td style="text-align: center; color: #64748b;">${idx + 1}</td>
                 <td style="font-family: monospace; font-weight: bold; color: #1e3a8a;">${b.bundleTag}</td>
                 <td>${b.rollsSummary || `${b.totalRollsCount || 10} reels`}</td>
-                <td>${b.coreType === 'paper_core' ? `Paper Core (-${b.paperCoreTareWeightKg.toFixed(2)}kg tare)` : 'PVC Core (0.00kg tare)'}</td>
+                <td>${b.coreType === 'paper_core' ? 'Paper Tube' : 'Plastic Tube'}</td>
                 <td class="text-right font-mono">${b.grossWeightKg.toFixed(2)}</td>
                 <td class="text-right font-mono" style="color: #b45309;">-${b.paperCoreTareWeightKg.toFixed(2)}</td>
                 <td class="text-right font-mono" style="font-weight: 800; color: #0f172a;">${b.netWeightKg.toFixed(2)}</td>

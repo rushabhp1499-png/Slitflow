@@ -1208,9 +1208,9 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         </span>
                       </div>
                       <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
-                        <span className="text-[10px] text-slate-500 block uppercase font-mono">Least Count & Tare</span>
+                        <span className="text-[10px] text-slate-500 block uppercase font-mono">Floor Scale Resolution</span>
                         <span className="text-xs font-bold text-slate-800 block mt-0.5">
-                          0.01 kg scale least count<br />Paper Core: -1.20kg tare
+                          0.01 kg precision least count
                         </span>
                       </div>
                     </div>
@@ -1271,7 +1271,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                             <th className="p-2 w-10 text-center">#</th>
                             <th className="p-2">Bundle Tag</th>
                             <th className="p-2">Slit Roll Specification</th>
-                            <th className="p-2">Core Type & Tare Rule</th>
+                            <th className="p-2">Core type</th>
                             <th className="p-2 text-right font-mono">Scale Gross Wt</th>
                             <th className="p-2 text-right font-mono">Tare Deduction</th>
                             <th className="p-2 text-right font-mono font-black text-slate-900">Net Weight</th>
@@ -1292,16 +1292,8 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                               <td className="p-2 text-center text-slate-400 font-normal">{bIdx + 1}</td>
                               <td className="p-2 font-bold text-blue-900 font-mono">{bundle.bundleTag}</td>
                               <td className="p-2 font-sans font-medium text-slate-800">{bundle.rollsSummary}</td>
-                              <td className="p-2 font-sans">
-                                {bundle.coreType === 'paper_core' ? (
-                                  <span className="text-amber-800">
-                                    Paper Core (-{bundle.paperCoreTareWeightKg.toFixed(2)}kg tare deducted)
-                                  </span>
-                                ) : (
-                                  <span className="text-blue-800">
-                                    PVC Core (0.00kg tare - counted in packaging)
-                                  </span>
-                                )}
+                              <td className="p-2 font-sans font-medium text-slate-800">
+                                {bundle.coreType === 'paper_core' ? 'Paper Tube' : 'Plastic Tube'}
                               </td>
                               <td className="p-2 text-right text-slate-600 font-mono">{bundle.grossWeightKg.toFixed(2)} kg</td>
                               <td className="p-2 text-right text-amber-700 font-mono">-{bundle.paperCoreTareWeightKg.toFixed(2)} kg</td>

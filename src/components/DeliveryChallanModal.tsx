@@ -723,7 +723,7 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
                               </th>
                               <th className="py-2.5 px-3">Bundle # & Tag</th>
                               <th className="py-2.5 px-3">Specification</th>
-                              <th className="py-2.5 px-3">Core & Tare</th>
+                              <th className="py-2.5 px-3">Core type</th>
                               <th className="py-2.5 px-3 text-right font-mono">Gross Wt</th>
                               <th className="py-2.5 px-3 text-right font-mono">Tare Wt</th>
                               <th className="py-2.5 px-3 text-right font-mono font-black">Net Wt</th>
@@ -762,16 +762,8 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
                                   <td className="py-2.5 px-3 font-sans text-slate-700">
                                     {b.rollsSummary || `${b.totalRollsCount || 10} reels`}
                                   </td>
-                                  <td className="py-2.5 px-3 font-sans text-[10px]">
-                                    {b.coreType === 'paper_core' ? (
-                                      <span className="text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-                                        Paper Core (-{b.paperCoreTareWeightKg.toFixed(2)}kg)
-                                      </span>
-                                    ) : (
-                                      <span className="text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-                                        PVC Core (0.00kg tare)
-                                      </span>
-                                    )}
+                                  <td className="py-2.5 px-3 font-sans text-xs font-medium text-slate-800">
+                                    {b.coreType === 'paper_core' ? 'Paper Tube' : 'Plastic Tube'}
                                   </td>
                                   <td className="py-2.5 px-3 text-right font-mono text-slate-600">
                                     {b.grossWeightKg.toFixed(2)} kg
@@ -1489,7 +1481,7 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
                             <th className="py-2 px-3 w-10 text-center">#</th>
                             <th className="py-2 px-3">Bundle Tag</th>
                             <th className="py-2 px-3">Specification / Description</th>
-                            <th className="py-2 px-3">Core Type & Tare</th>
+                            <th className="py-2 px-3">Core type</th>
                             <th className="py-2 px-3 text-right font-mono">Gross Wt (kg)</th>
                             <th className="py-2 px-3 text-right font-mono">Tare Deduction</th>
                             <th className="py-2 px-3 text-right font-mono font-black">Net Wt (kg)</th>
@@ -1501,12 +1493,8 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
                               <td className="py-2 px-3 text-center text-slate-500">{idx + 1}</td>
                               <td className="py-2 px-3 font-bold text-blue-900">{b.bundleTag}</td>
                               <td className="py-2 px-3 font-sans text-slate-700">{b.rollsSummary || `${b.totalRollsCount || 10} reels`}</td>
-                              <td className="py-2 px-3 font-sans text-[11px]">
-                                {b.coreType === 'paper_core' ? (
-                                  <span className="text-amber-800">Paper Core (-{b.paperCoreTareWeightKg.toFixed(2)}kg)</span>
-                                ) : (
-                                  <span className="text-blue-800">PVC Core (0.00kg tare)</span>
-                                )}
+                              <td className="py-2 px-3 font-sans text-xs font-medium text-slate-800">
+                                {b.coreType === 'paper_core' ? 'Paper Tube' : 'Plastic Tube'}
                               </td>
                               <td className="py-2 px-3 text-right text-slate-700">{b.grossWeightKg.toFixed(2)} kg</td>
                               <td className="py-2 px-3 text-right text-amber-700">-{b.paperCoreTareWeightKg.toFixed(2)} kg</td>

@@ -275,10 +275,10 @@ export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({
                 <p className="text-[10px] text-slate-500 mt-1">Direct physical balance reading</p>
               </div>
 
-              {/* 2. Core / Tube Selection */}
+              {/* 2. Core type Selection */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Core / Tube Type
+                  Core type
                 </label>
                 <div className="grid grid-cols-2 gap-1 bg-slate-200 p-1 rounded-lg text-xs font-semibold">
                   <button
@@ -301,18 +301,15 @@ export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({
                         : 'text-slate-700 hover:text-slate-900'
                     }`}
                   >
-                    PVC / None (0 Tare)
+                    Plastic Tube
                   </button>
                 </div>
-                <p className="text-[10px] text-slate-500 mt-1">
-                  {coreType === 'paper_core' ? 'Deducts paper core tare' : 'No tare deducted'}
-                </p>
               </div>
 
-              {/* 3. Editable Paper Core Tare Weight */}
+              {/* 3. Editable Paper Core Weight */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Paper Core Tare Weight (kg)
+                  {coreType === 'paper_core' ? 'Paper Tube Weight (kg)' : 'Core Tube Weight'}
                 </label>
                 {coreType === 'paper_core' ? (
                   <div>
@@ -347,8 +344,8 @@ export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-500 font-mono font-semibold">
-                    0.00 kg (PVC / No Core)
+                  <div className="bg-slate-100 border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-600 font-medium">
+                    0.00 kg (Plastic Tube)
                   </div>
                 )}
               </div>
@@ -362,7 +359,7 @@ export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({
                   {netWeight > 0 ? netWeight.toFixed(2) : '0.00'} kg
                 </span>
                 <span className="text-[10px] text-emerald-600 font-medium">
-                  {grossNumber.toFixed(2)} - {effectiveTare.toFixed(2)} tare
+                  Core type: {coreType === 'paper_core' ? `Paper Tube (-${effectiveTare.toFixed(2)} kg)` : 'Plastic Tube'}
                 </span>
               </div>
             </div>
@@ -511,8 +508,8 @@ export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({
                     <tr>
                       <th className="py-2.5 px-3">Bundle #</th>
                       <th className="py-2.5 px-3">Rolls & Sizes</th>
+                      <th className="py-2.5 px-3">Core type</th>
                       <th className="py-2.5 px-3 text-right">Gross Wt</th>
-                      <th className="py-2.5 px-3 text-right">Core Tare</th>
                       <th className="py-2.5 px-3 text-right font-bold">Net Wt</th>
                       <th className="py-2.5 px-3 text-center">Status</th>
                       <th className="py-2.5 px-3 text-center">Action</th>
@@ -527,11 +524,11 @@ export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({
                         <td className="py-2 px-3 text-slate-700 font-sans font-medium">
                           {b.rollsSummary}
                         </td>
+                        <td className="py-2 px-3 text-slate-700 font-sans font-medium">
+                          {b.coreType === 'paper_core' ? 'Paper Tube' : 'Plastic Tube'}
+                        </td>
                         <td className="py-2 px-3 text-right text-slate-600">
                           {b.grossWeightKg.toFixed(2)} kg
-                        </td>
-                        <td className="py-2 px-3 text-right text-slate-500">
-                          {b.paperCoreTareWeightKg > 0 ? `-${b.paperCoreTareWeightKg.toFixed(2)}` : '0.00'} kg
                         </td>
                         <td className="py-2 px-3 text-right font-black text-emerald-700">
                           {b.netWeightKg.toFixed(2)} kg

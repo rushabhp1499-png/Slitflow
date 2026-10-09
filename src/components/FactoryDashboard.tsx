@@ -1196,8 +1196,8 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                                         <div>
                                           <span className="font-mono font-bold text-blue-900">{b.bundleTag}</span>
                                           <span className="text-[10px] text-slate-500 block">{b.rollsSummary}</span>
-                                          <span className="text-[9px] text-slate-400">
-                                            {b.coreType === 'paper_core' ? 'Paper (Tare -' + b.paperCoreTareWeightKg.toFixed(2) + 'kg)' : 'PVC Core'}
+                                          <span className="text-[10px] text-slate-500 block font-medium">
+                                            Core type: {b.coreType === 'paper_core' ? 'Paper Tube' : 'Plastic Tube'}
                                           </span>
                                         </div>
                                         <div className="text-right font-mono">
