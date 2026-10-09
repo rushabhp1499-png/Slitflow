@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useProduction } from '../context/ProductionContext';
 import { MaterialInward, ProductionStatus } from '../types';
 import { StatusBadge } from './StatusBadge';
+import { DailyProductionChart } from './DailyProductionChart';
 import {
   Search,
   Filter,
@@ -559,6 +560,14 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
         </button>
 
       </div>
+
+      {/* Daily Production Output Visualization Dashboard (Recharts) */}
+      <DailyProductionChart
+        jobs={jobs}
+        onSelectDateFilter={(selectedDate) => {
+          setSearchQuery(selectedDate);
+        }}
+      />
 
       {/* Primary Actions & Customer Directory Access */}
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3">
