@@ -433,7 +433,7 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+            <div className={`grid gap-3 mt-3 ${isCustomerPortal ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Incoming Coils / Jumbo Rolls Count
@@ -446,21 +446,23 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:bg-white"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Assigned Machine Line
-                </label>
-                <select
-                  value={assignedMachine}
-                  onChange={(e) => setAssignedMachine(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white"
-                >
-                  <option value="Paper & Film Slitter Rewinder #3 (2000mm)">Slitter Rewinder #3 (Film & Paper 2000mm)</option>
-                  <option value="Precision Slitter #1 (1300mm)">Slitter Line #1 (1300mm Precision)</option>
-                  <option value="Precision Slitter #2 (Heavy Gauge)">Slitter Line #2 (Heavy Gauge Coil)</option>
-                  <option value="Micro Shearing Line #4">Shearing & Micro Strip Line #4</option>
-                </select>
-              </div>
+              {!isCustomerPortal && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Assigned Machine Line
+                  </label>
+                  <select
+                    value={assignedMachine}
+                    onChange={(e) => setAssignedMachine(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white"
+                  >
+                    <option value="Paper & Film Slitter Rewinder #3 (2000mm)">Slitter Rewinder #3 (Film & Paper 2000mm)</option>
+                    <option value="Precision Slitter #1 (1300mm)">Slitter Line #1 (1300mm Precision)</option>
+                    <option value="Precision Slitter #2 (Heavy Gauge)">Slitter Line #2 (Heavy Gauge Coil)</option>
+                    <option value="Micro Shearing Line #4">Shearing & Micro Strip Line #4</option>
+                  </select>
+                </div>
+              )}
             </div>
           </div>
 

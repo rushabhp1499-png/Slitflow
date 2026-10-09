@@ -26,7 +26,9 @@ import {
   CheckSquare,
   Square,
   Scale,
-  Layers
+  Layers,
+  Lock,
+  Unlock
 } from 'lucide-react';
 
 interface DeliveryChallanModalProps {
@@ -36,6 +38,9 @@ interface DeliveryChallanModalProps {
 
 export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job, onClose }) => {
   const {
+    jobs,
+    reopenCustomerPo,
+    activeRole,
     generateDeliveryChallan,
     updateDeliveryChallan,
     deleteDeliveryChallan,
@@ -46,20 +51,26 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
     addMultipleBundlesToJob,
   } = useProduction();
 
-  const customer = customers.find((c) => c.id === job.customerId);
+  const currentJob = jobs.find((j) => j.id === job.id) || job;
+  const isPermanentlyClosed =
+    currentJob.status === 'permanently_closed' ||
+    currentJob.status === 'delivered_closed' ||
+    currentJob.poStatus === 'closed';
+
+  const customer = customers.find((c) => c.id === currentJob.customerId);
   const existingChallans: DeliveryChallan[] =
-    job.challans && job.challans.length > 0
-      ? job.challans
-      : job.challan
-      ? [job.challan]
+    currentJob.challans && currentJob.challans.length > 0
+      ? currentJob.challans
+      : currentJob.challan
+      ? [currentJob.challan]
       : [];
 
   const [activeChallanId, setActiveChallanId] = useState<string>(
     existingChallans[existingChallans.length - 1]?.id || ''
   );
 
-  // If there are no challans yet, default to creating a new one
-  const [isCreatingNew, setIsCreatingNew] = useState<boolean>(existingChallans.length === 0);
+  // If there are no challans yet and PO is open, default to creating a new one
+  const [isCreatingNew, setIsCreatingNew] = useState<boolean>(existingChallans.length === 0 && !isPermanentlyClosed);
   const [isEditingExisting, setIsEditingExisting] = useState<boolean>(false);
   const [showDriveSettings, setShowDriveSettings] = useState<boolean>(false);
   const [customDriveInput, setCustomDriveInput] = useState<string>(driveWebLink);
@@ -406,8 +417,8 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
               </div>
             )}
 
-            {/* + New Challan Button */}
-            {balanceRemaining > 0 && !isCreatingNew && (
+            {/* + New Challan Button - Disabled if PO is Permanently Closed */}
+            {!isPermanentlyClosed && balanceRemaining > 0 && !isCreatingNew && (
               <button
                 type="button"
                 onClick={() => {
@@ -541,11 +552,58 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
           </div>
         )}
 
+        {/* PO Closed Notice Banner */}
+        {isPermanentlyClosed && (
+          <div className="no-print bg-amber-50 border-b border-amber-200 px-5 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-900">
+            <div className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                <strong>PO Permanently Closed (View Only):</strong> You can only view challans generated for this PO. Editing and creating new challans are locked. To edit or make a new challan, reopen this PO.
+              </span>
+            </div>
+            {activeRole === 'factory' && (
+              <button
+                type="button"
+                onClick={() => reopenCustomerPo(currentJob.id)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition shadow-2xs shrink-0 cursor-pointer"
+                title="Reopen this PO to enable editing or making new delivery challans"
+              >
+                <Unlock className="w-3.5 h-3.5" />
+                <span>Reopen PO</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/50">
           
-          {/* SCENARIO 1: Create New Challan Form */}
-          {isCreatingNew ? (
+          {/* SCENARIO 0: Closed PO with No Challans Generated */}
+          {isPermanentlyClosed && existingChallans.length === 0 ? (
+            <div className="max-w-lg mx-auto bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-xs space-y-4 my-8">
+              <div className="w-12 h-12 bg-amber-100 text-amber-700 rounded-2xl mx-auto flex items-center justify-center">
+                <Lock className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-base font-extrabold text-slate-900">PO Permanently Closed</h4>
+                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                  This Customer PO ({currentJob.customerPoNo}) is closed and has no challans. Creating a new delivery challan is locked while the PO is closed. If you want to make a new challan, the PO must be reopened.
+                </p>
+              </div>
+              {activeRole === 'factory' && (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => reopenCustomerPo(currentJob.id)}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                  >
+                    <Unlock className="w-4 h-4" />
+                    <span>Reopen PO to Make Challan</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : isCreatingNew && !isPermanentlyClosed ? (
             <div className="max-w-3xl mx-auto bg-white border border-slate-200 rounded-2xl p-5 sm:p-7 shadow-xs">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-5">
                 <div>
@@ -1024,25 +1082,28 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                  {isEditingExisting ? (
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingExisting(false)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Exit Edit Mode</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleStartEdit}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 text-xs font-bold rounded-lg transition"
-                      title="Edit this challan's weight, vehicle, or details"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                      <span>Edit Challan</span>
-                    </button>
+                  {/* Edit Challan button - Locked if PO is Permanently Closed */}
+                  {!isPermanentlyClosed && (
+                    isEditingExisting ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingExisting(false)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Exit Edit Mode</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleStartEdit}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 text-xs font-bold rounded-lg transition"
+                        title="Edit this challan's weight, vehicle, or details"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span>Edit Challan</span>
+                      </button>
+                    )
                   )}
 
                   <button
@@ -1075,34 +1136,36 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
                     <span>Print / PDF</span>
                   </button>
 
-                  {/* Delete / Void Button */}
-                  {confirmDeleteId === activeChallan.id ? (
-                    <div className="flex items-center gap-1 bg-red-50 p-1 rounded-lg border border-red-200">
-                      <span className="text-[11px] text-red-700 font-bold px-1">Confirm void?</span>
+                  {/* Delete / Void Button - Hidden if PO is closed */}
+                  {!isPermanentlyClosed && (
+                    confirmDeleteId === activeChallan.id ? (
+                      <div className="flex items-center gap-1 bg-red-50 p-1 rounded-lg border border-red-200">
+                        <span className="text-[11px] text-red-700 font-bold px-1">Confirm void?</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteChallan(activeChallan.id)}
+                          className="px-2 py-1 bg-red-600 text-white rounded text-[11px] font-bold hover:bg-red-700"
+                        >
+                          Yes, Void
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="px-1.5 py-1 text-slate-500 hover:text-slate-800 text-[11px]"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
                       <button
                         type="button"
-                        onClick={() => handleDeleteChallan(activeChallan.id)}
-                        className="px-2 py-1 bg-red-600 text-white rounded text-[11px] font-bold hover:bg-red-700"
+                        onClick={() => setConfirmDeleteId(activeChallan.id)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
+                        title="Void / Delete this challan and restore material weight"
                       >
-                        Yes, Void
+                        <Trash2 className="w-4 h-4" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDeleteId(null)}
-                        className="px-1.5 py-1 text-slate-500 hover:text-slate-800 text-[11px]"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDeleteId(activeChallan.id)}
-                      className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition"
-                      title="Void / Delete this challan and restore material weight"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    )
                   )}
                 </div>
               </div>

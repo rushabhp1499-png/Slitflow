@@ -1001,9 +1001,26 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                             </div>
                           )}
 
-                          {/* Delivery Challan / Dispatch Button - Always Operable */}
+                          {/* Delivery Challan / Dispatch Button */}
                           <div>
-                            {challanCount > 0 ? (
+                            {isPermanentlyClosed ? (
+                              challanCount > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenChallanModal(job)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg transition shadow-2xs cursor-pointer"
+                                  title="View generated challans (PO Closed - View Only)"
+                                >
+                                  <FileText className="w-3.5 h-3.5 text-slate-600" />
+                                  <span>View Challan{challanCount > 1 ? 's' : ''} ({challanCount})</span>
+                                </button>
+                              ) : (
+                                <span className="text-[11px] text-slate-400 font-medium italic px-2.5 py-1 bg-slate-100 rounded border border-slate-200 inline-flex items-center gap-1">
+                                  <Lock className="w-3 h-3 text-slate-400" />
+                                  PO Closed
+                                </span>
+                              )
+                            ) : challanCount > 0 ? (
                               <button
                                 type="button"
                                 onClick={() => onOpenChallanModal(job)}
