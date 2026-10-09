@@ -28,10 +28,6 @@ import {
   Building2,
   Share2,
   Package,
-  ShieldCheck,
-  UserCheck,
-  KeyRound,
-  LogOut,
   Factory
 } from 'lucide-react';
 
@@ -58,28 +54,8 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
     jobs,
     customers,
     updateJobStatus,
-    factoryUsers,
-    activeFactoryUser,
-    loginFactoryUser,
-    logoutFactoryUser,
     reopenCustomerPo,
   } = useProduction();
-
-  const [staffPinInput, setStaffPinInput] = useState('');
-  const [staffAuthError, setStaffAuthError] = useState('');
-
-  const handlePinLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setStaffAuthError('');
-    if (!staffPinInput.trim()) return;
-
-    const ok = loginFactoryUser(staffPinInput.trim());
-    if (!ok) {
-      setStaffAuthError(
-        `Access Denied: PIN or Badge "${staffPinInput}" is not recognized. Please choose from the 4 authorized factory personnel below.`
-      );
-    }
-  };
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -159,168 +135,26 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
     return diffDays;
   };
 
-  // If no factory user is logged in, show the 4-person Factory Terminal Gate
-  if (!activeFactoryUser) {
-    return (
-      <div className="max-w-4xl mx-auto space-y-6 py-4 animate-in fade-in duration-200">
-        {/* Terminal Header */}
-        <div className="bg-slate-900 text-white border border-slate-800 rounded-2xl p-6 shadow-xl">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-xl bg-blue-600/30 border border-blue-500/30 flex items-center justify-center text-blue-400">
-                <Factory className="w-7 h-7" />
-              </div>
-              <div>
-                <h1 className="text-xl font-black tracking-tight text-white">
-                  Factory Operations Terminal
-                </h1>
-                <p className="text-xs text-slate-400">
-                  Progressive Enterprises • Precision Slitting & Works Management
-                </p>
-              </div>
-            </div>
-            <div className="inline-flex items-center gap-2 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-300">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>Restricted: 4 Authorized Factory Personnel</span>
-            </div>
-          </div>
-
-          <div className="mt-4 pt-4 border-t border-slate-800/80 text-xs text-slate-300">
-            Select your factory profile below or enter your 4-digit Factory PIN / Badge ID to enter and operate the plant dashboard.
-          </div>
-        </div>
-
-        {/* Error Alert */}
-        {staffAuthError && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-900 flex items-start gap-2.5">
-            <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold block">Access Denied</span>
-              <p>{staffAuthError}</p>
-            </div>
-          </div>
-        )}
-
-        {/* PIN Entry Form */}
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs">
-          <form onSubmit={handlePinLogin} className="flex flex-col sm:flex-row items-center gap-3">
-            <div className="relative flex-1 w-full">
-              <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-              <input
-                type="text"
-                placeholder="Enter 4-Digit PIN (e.g. 1001, 1002, 1003, 1004) or Badge ID"
-                value={staffPinInput}
-                onChange={(e) => setStaffPinInput(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-600"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full sm:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 shrink-0"
-            >
-              <UserCheck className="w-4 h-4" />
-              <span>Verify & Open Terminal</span>
-            </button>
-          </form>
-        </div>
-
-        {/* 4 Authorized Factory Staff Profiles */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xs uppercase font-bold tracking-wider text-slate-500">
-              Authorized Factory Accounts ({factoryUsers.length} Floor Personnel):
-            </h2>
-            <span className="text-[11px] text-slate-400">Click any card for 1-click access</span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {factoryUsers.map((user) => (
-              <div
-                key={user.id}
-                className="bg-white border border-slate-200 hover:border-blue-400 rounded-2xl p-5 shadow-2xs hover:shadow-md transition group flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-base text-slate-800 group-hover:bg-blue-50 group-hover:text-blue-700 group-hover:border-blue-200 transition">
-                        {user.name.split(' ').map((n) => n[0]).join('')}
-                      </div>
-                      <div>
-                        <h3 className="font-extrabold text-sm text-slate-900 group-hover:text-blue-700 transition">
-                          {user.name}
-                        </h3>
-                        <p className="text-xs font-semibold text-blue-600">
-                          {user.role}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="font-mono text-[11px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
-                      PIN: {user.pin}
-                    </span>
-                  </div>
-
-                  <div className="mt-3.5 space-y-1 text-xs text-slate-600 border-t border-slate-100 pt-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Badge ID:</span>
-                      <span className="font-mono font-bold text-slate-800">{user.badgeCode}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Department:</span>
-                      <span className="font-medium text-slate-700">{user.department}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Email:</span>
-                      <span className="font-mono text-[11px] text-slate-600">{user.email}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Phone:</span>
-                      <span className="font-mono text-[11px] text-slate-600">{user.phone}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => loginFactoryUser(user.id)}
-                    className="w-full py-2.5 bg-slate-900 hover:bg-blue-600 group-hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center justify-center gap-2"
-                  >
-                    <UserCheck className="w-4 h-4" />
-                    <span>Open Dashboard as {user.name}</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       
       {/* Factory Operator Top Status Banner */}
       <div className="bg-slate-900 text-white border border-slate-800 rounded-xl p-3 sm:p-4 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-blue-600/30 border border-blue-500/30 flex items-center justify-center text-blue-400 font-bold text-sm shrink-0">
-            {activeFactoryUser.name.split(' ').map((n) => n[0]).join('')}
+          <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+            <Factory className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-extrabold text-sm text-white">
-                {activeFactoryUser.name}
+              <span className="font-bold text-sm sm:text-base text-white">
+                Factory Master Control Panel
               </span>
               <span className="text-[10px] uppercase font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded">
-                {activeFactoryUser.role}
-              </span>
-              <span className="font-mono text-[11px] text-slate-400">
-                Badge: {activeFactoryUser.badgeCode}
+                Live Shop Floor
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
-              Department: {activeFactoryUser.department} • {activeFactoryUser.email}
+              Progressive Enterprises • Precision Slitting & Works Management
             </p>
           </div>
         </div>
@@ -331,7 +165,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             <button
               type="button"
               onClick={onOpenCustomerModal}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold transition"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold transition cursor-pointer"
               title="Register Customer Details & Authorized Email IDs into Machine"
             >
               <Building2 className="w-3.5 h-3.5 text-blue-400" />
@@ -343,22 +177,11 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
           <button
             type="button"
             onClick={onOpenInwardModal}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-lg text-xs font-bold transition shadow-xs"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
             title="Create Incoming Raw Material Inward"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>+ Material Inward</span>
-          </button>
-
-          {/* Switch Factory Staff / Log Out */}
-          <button
-            type="button"
-            onClick={logoutFactoryUser}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-red-900/60 text-slate-300 hover:text-red-200 border border-slate-700 hover:border-red-700 rounded-lg text-xs font-bold transition"
-            title="Switch staff member or sign out of factory terminal"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span>Switch Staff</span>
           </button>
         </div>
       </div>
@@ -588,37 +411,6 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
           {/* Action Buttons */}
           <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto justify-end">
             
-            {/* Status Filter */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-slate-700"
-            >
-              <option value="ALL">All Stages ({jobs.length})</option>
-              <option value="IN_QUEUE">⏳ In Queue / Pending ({notTakenCount})</option>
-              <option value="UNDER_SLITTING">✂️ Under Slitting ({inProductionCount})</option>
-              <option value="READY_DISPATCH">📦 Ready for Dispatch ({readyDispatchCount})</option>
-              <option value="NEEDS_EDD">⚠️ Needs Delivery Date ({pendingEddCount})</option>
-              <option value="received">Material Received</option>
-              <option value="pending_production">Pending Production</option>
-              <option value="in_production">In Production</option>
-              <option value="slitting_completed">Slitting Completed</option>
-              <option value="ready_for_dispatch">Ready for Dispatch</option>
-              <option value="PO_CLOSED">🔒 Permanently Closed POs ({closedPoCount})</option>
-            </select>
-
-            {statusFilter !== 'ALL' && (
-              <button
-                type="button"
-                onClick={() => setStatusFilter('ALL')}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-semibold transition"
-                title="Reset status filter to show all"
-              >
-                <span>Clear Filter</span>
-                <span className="font-bold">✕</span>
-              </button>
-            )}
-
             {/* Customer Filter */}
             <select
               value={customerFilter}
@@ -637,7 +429,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             <button
               type="button"
               onClick={onOpenCustomerModal}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-bold border border-slate-300 transition"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-bold border border-slate-300 transition cursor-pointer"
               title="Manage customer registered addresses and authorize multiple email IDs"
             >
               <Users className="w-3.5 h-3.5 text-blue-600" />
@@ -651,7 +443,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             <button
               type="button"
               onClick={onOpenInwardModal}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition shadow-xs"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Inward Entry</span>
@@ -659,100 +451,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
 
           </div>
         </div>
-
-        {/* Quick Filter Badges */}
-        <div className="flex items-center gap-2 flex-wrap text-xs pt-1 border-t border-slate-100">
-          <span className="text-slate-400 font-medium">Quick Views:</span>
-          <button
-            onClick={() => setStatusFilter('ALL')}
-            className={`px-2 py-0.5 rounded-md text-xs font-medium transition ${
-              statusFilter === 'ALL'
-                ? 'bg-slate-900 text-white font-bold'
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-            }`}
-          >
-            All Jobs ({jobs.length})
-          </button>
-          <button
-            onClick={() => setStatusFilter('IN_QUEUE')}
-            className={`px-2 py-0.5 rounded-md text-xs font-medium transition ${
-              statusFilter === 'IN_QUEUE'
-                ? 'bg-amber-600 text-white font-bold'
-                : 'bg-amber-50 hover:bg-amber-100 text-amber-800'
-            }`}
-          >
-            ⏳ In Queue ({notTakenCount})
-          </button>
-          <button
-            onClick={() => setStatusFilter('UNDER_SLITTING')}
-            className={`px-2 py-0.5 rounded-md text-xs font-medium transition ${
-              statusFilter === 'UNDER_SLITTING'
-                ? 'bg-blue-600 text-white font-bold'
-                : 'bg-blue-50 hover:bg-blue-100 text-blue-800'
-            }`}
-          >
-            ✂️ Under Slitting ({inProductionCount})
-          </button>
-          <button
-            onClick={() => setStatusFilter('READY_DISPATCH')}
-            className={`px-2 py-0.5 rounded-md text-xs font-medium transition ${
-              statusFilter === 'READY_DISPATCH'
-                ? 'bg-emerald-600 text-white font-bold'
-                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800'
-            }`}
-          >
-            📦 Ready for Dispatch ({readyDispatchCount})
-          </button>
-          <button
-            onClick={() => setStatusFilter('PO_CLOSED')}
-            className={`px-2 py-0.5 rounded-md text-xs font-medium transition ${
-              statusFilter === 'PO_CLOSED'
-                ? 'bg-red-700 text-white font-bold'
-                : 'bg-red-50 hover:bg-red-100 text-red-800'
-            }`}
-          >
-            🔒 Permanently Closed ({closedPoCount})
-          </button>
-        </div>
       </div>
-
-      {/* Active Filter Notification Bar */}
-      {statusFilter !== 'ALL' && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2.5 flex items-center justify-between shadow-2xs">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
-            <span className="text-xs font-bold text-blue-900">
-              Active Dashboard Filter:
-            </span>
-            <span className="text-xs font-black uppercase tracking-wide bg-blue-200/80 text-blue-950 px-2 py-0.5 rounded">
-              {statusFilter === 'IN_QUEUE'
-                ? '⏳ In Queue (Awaiting Slitting)'
-                : statusFilter === 'UNDER_SLITTING'
-                ? '✂️ Under Slitting / Live on Floor'
-                : statusFilter === 'READY_DISPATCH'
-                ? '📦 Ready for Dispatch'
-                : statusFilter === 'PO_CLOSED'
-                ? '🔒 Closed & Reconciled POs'
-                : statusFilter}
-            </span>
-            <span className="text-xs text-blue-700 font-medium">
-              (Showing {filteredJobs.length} of {jobs.length} jobs)
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              setStatusFilter('ALL');
-              setSearchQuery('');
-              setCustomerFilter('ALL');
-            }}
-            className="text-xs font-bold text-blue-800 hover:text-blue-950 underline hover:no-underline flex items-center gap-1"
-          >
-            <span>Show All Inward Orders</span>
-            <span>✕</span>
-          </button>
-        </div>
-      )}
 
       {/* Jobs Master Table */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-2xs overflow-hidden">

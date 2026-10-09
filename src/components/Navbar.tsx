@@ -37,8 +37,6 @@ export const Navbar: React.FC<NavbarProps> = ({
     logoutCustomer,
     customers,
     selectedCustomerId,
-    activeFactoryUser,
-    logoutFactoryUser,
   } = useProduction();
 
   const unreadNotifs = notifications.filter((n) => !n.read).length;
@@ -55,24 +53,30 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between h-16 gap-4">
           
           {/* Brand Logo & Tagline */}
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-16 sm:w-20 bg-white/95 rounded-xl p-1 flex items-center justify-center shadow-inner border border-slate-700 shrink-0">
+          <div className="flex items-center gap-3.5">
+            <div className="h-11 w-20 sm:w-24 bg-white rounded-xl p-1.5 flex items-center justify-center shadow-xs border border-slate-700/80 shrink-0">
               <img
                 src="/pe-logo.svg"
-                alt="Progressive Enterprises"
-                className="h-8 w-full object-contain"
+                alt="Progressive Enterprises Logo"
+                className="h-full w-full object-contain"
               />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-extrabold text-base tracking-tight text-white">
-                  {COMPANY_INFO.name}
+                <span
+                  style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
+                  className="font-normal text-lg sm:text-xl tracking-normal text-white select-none"
+                >
+                  Progressive Enterprises
                 </span>
-                <span className="hidden sm:inline-block text-[10px] uppercase font-bold tracking-widest bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded">
+                <span className="hidden sm:inline-block text-[10px] uppercase font-medium tracking-wider bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded">
                   Precision Slitting Works
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400 font-medium hidden md:block">
+              <p
+                style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
+                className="text-[11px] text-slate-400 font-normal hidden md:block"
+              >
                 Industrial Slitting, Packaging & Customer Live Delivery Tracker
               </p>
             </div>
@@ -108,33 +112,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Action Tools */}
           <div className="flex items-center gap-2">
-            
-            {/* Factory Staff Status */}
-            {activeRole === 'factory' && (
-              activeFactoryUser ? (
-                <div className="hidden lg:flex items-center gap-1.5 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-lg text-xs">
-                  <span className="w-2 h-2 rounded-full bg-blue-400"></span>
-                  <span className="text-[11px] text-slate-200 font-bold truncate max-w-[130px]">
-                    {activeFactoryUser.name}
-                  </span>
-                  <span className="text-[9px] bg-blue-500/20 text-blue-300 font-mono px-1 py-0.2 rounded border border-blue-400/20">
-                    {activeFactoryUser.badgeCode}
-                  </span>
-                  <button
-                    onClick={logoutFactoryUser}
-                    className="text-slate-400 hover:text-red-400 p-0.5 ml-1"
-                    title="Switch factory staff"
-                  >
-                    <LogOut className="w-3 h-3" />
-                  </button>
-                </div>
-              ) : (
-                <div className="hidden lg:flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-lg text-xs text-amber-300 font-semibold">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                  <span>4 Factory Staff</span>
-                </div>
-              )
-            )}
 
             {/* Customer Login / Auth badge */}
             {activeRole === 'customer' && (

@@ -22,14 +22,16 @@ export const Logo: React.FC<LogoProps> = ({
       {showText && (
         <div className="leading-tight">
           <span
-            className={`font-black tracking-tight text-sm block ${
+            style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
+            className={`font-normal tracking-normal text-sm block ${
               lightText ? 'text-white' : 'text-slate-900'
             }`}
           >
-            PROGRESSIVE ENTERPRISES
+            Progressive Enterprises
           </span>
           <span
-            className={`text-[10px] tracking-wider uppercase block ${
+            style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
+            className={`text-[10px] tracking-wider uppercase block font-normal ${
               lightText ? 'text-slate-400' : 'text-slate-500'
             }`}
           >
