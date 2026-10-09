@@ -38,7 +38,7 @@ import {
 interface FactoryDashboardProps {
   onOpenInwardModal: () => void;
   onOpenEddModal: (job: MaterialInward) => void;
-  onOpenOutputModal: (job: MaterialInward) => void;
+  onOpenOutputModal?: (job: MaterialInward) => void;
   onOpenChallanModal: (job: MaterialInward) => void;
   onOpenBundleWeighingModal: (job: MaterialInward) => void;
   onOpenCustomerModal?: () => void;
@@ -910,11 +910,10 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
 
                               {job.status === 'in_production' && (
                                 <button
-                                  onClick={() => onOpenOutputModal(job)}
-                                  className="text-[10px] font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 px-2 py-0.5 rounded border border-purple-200 flex items-center gap-1"
+                                  onClick={() => updateJobStatus(job.id, 'ready_for_dispatch', 'Slitting & bundling completed')}
+                                  className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200"
                                 >
-                                  <Scissors className="w-2.5 h-2.5" />
-                                  Record Output
+                                  Mark Ready
                                 </button>
                               )}
 
@@ -984,43 +983,32 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                           )}
                         </td>
 
-                        {/* Factory Operations: Output, Challan, Partial Dispatch & PO Close */}
+                        {/* Factory Operations: Bundle Details, Challan & PO Close */}
                         <td className="py-3.5 px-4 align-top text-right space-y-1.5">
                           
-                          {/* Output Slitting Entry (Only shown when not yet recorded; Edit Slit Output removed per user request) */}
+                          {/* Add Bundle Details Dialog */}
                           {!isPermanentlyClosed && (
                             <div className="flex flex-col gap-1 items-end">
-                              {!job.outputDetails && (
-                                <button
-                                  onClick={() => onOpenOutputModal(job)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-md transition"
-                                  title="Record slitting cut widths, bundle packaging, and scrap"
-                                >
-                                  <Scissors className="w-3 h-3" />
-                                  <span>Slit & Pack</span>
-                                </button>
-                              )}
-
-                              {/* Floor Bundle Weighing Scale Dialog */}
                               <button
+                                type="button"
                                 onClick={() => onOpenBundleWeighingModal(job)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition"
-                                title="Floor Weighing Scale dialog: record bundles, auto tare deduction"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition shadow-2xs cursor-pointer"
+                                title="Add bundle weights, core tube tare deduction, and roll size specifications"
                               >
-                                <Scale className="w-3 h-3 text-blue-600" />
-                                <span>Weigh Scale ({job.bundles?.length || 0})</span>
+                                <Package className="w-3.5 h-3.5 text-blue-600" />
+                                <span>Add Bundle Details ({job.bundles?.length || 0})</span>
                               </button>
                             </div>
                           )}
 
-                          {/* Delivery Challan / Partial Dispatch Button - Always Operable */}
+                          {/* Delivery Challan / Dispatch Button - Always Operable */}
                           <div>
                             {challanCount > 0 ? (
                               <button
                                 type="button"
                                 onClick={() => onOpenChallanModal(job)}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-slate-900 hover:bg-black rounded-lg transition shadow-xs cursor-pointer"
-                                title="View official printable delivery challan(s) or generate new partial challan"
+                                title="View official printable delivery challan(s) or generate new challan"
                               >
                                 <FileText className="w-3.5 h-3.5 text-emerald-400" />
                                 <span>{challanCount} Challan{challanCount > 1 ? 's' : ''} (View / +New)</span>
@@ -1037,14 +1025,10 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                                     ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                                     : 'bg-blue-600 hover:bg-blue-700 text-white'
                                 }`}
-                                title={
-                                  job.status === 'in_production'
-                                    ? 'Issue Urgent Partial Delivery Challan with Bundle Selection'
-                                    : 'Generate official delivery challan with 50g least count and bundle checklist'
-                                }
+                                title="Generate official delivery challan with 50g least count and bundle checklist"
                               >
                                 <Truck className="w-3.5 h-3.5" />
-                                <span>{job.status === 'in_production' ? '⚡ Urgent Partial' : 'Make Challan'}</span>
+                                <span>Make Challan</span>
                               </button>
                             )}
                           </div>
