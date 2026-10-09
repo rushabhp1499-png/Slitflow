@@ -103,9 +103,13 @@ export const PoCloseModal: React.FC<PoCloseModalProps> = ({ job, onClose }) => {
             </div>
 
             <div className="flex justify-between py-1 bg-emerald-50/80 p-2 rounded-lg text-emerald-900">
-              <span className="font-semibold">Reconciled Balance / Discrepancy:</span>
+              <span className="font-semibold">Reconciled Balance / Status:</span>
               <span className="font-black">
-                {variance === 0 ? '0 kg (100% Balanced)' : `${variance} kg accounted`}
+                {variance === 0
+                  ? '0 kg (100% Balanced)'
+                  : variance < 0
+                  ? `+${Math.abs(variance).toLocaleString()} kg surplus dispatched (Accepted)`
+                  : `${variance.toLocaleString()} kg accounted`}
               </span>
             </div>
 

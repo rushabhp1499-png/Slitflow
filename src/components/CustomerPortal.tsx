@@ -1210,7 +1210,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5">
                         <span className="text-[10px] text-slate-500 block uppercase font-mono">Floor Scale Resolution</span>
                         <span className="text-xs font-bold text-slate-800 block mt-0.5">
-                          0.01 kg precision least count
+                          50g (0.05 kg) least count
                         </span>
                       </div>
                     </div>

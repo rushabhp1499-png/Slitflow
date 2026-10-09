@@ -263,7 +263,7 @@ export function downloadChallanAsHtml(challan: DeliveryChallan, job: MaterialInw
           Itemized Bundle Dispatch Schedule & Floor Weighment Manifest (${displayList.length} Bundles Dispatched)
         </h3>
         <p style="font-size: 11px; color: #64748b; margin: 0 0 8px 0;">
-          Physical bundle scale readings verified at Progressive Enterprises dispatch dock. Weight least-count: 0.01 kg (50g certified resolution).
+          Physical bundle scale readings verified at Progressive Enterprises dispatch dock. Weight least count: 50 g (0.05 kg certified resolution).
         </p>
         <table style="margin-bottom: 12px; font-size: 11.5px;">
           <thead>

@@ -124,13 +124,13 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
   const [editTransporter, setEditTransporter] = useState<string>(activeChallan?.transporterName || '');
   const [editEWayBill, setEditEWayBill] = useState<string>(activeChallan?.eWayBillNo || '');
 
-  // Quick weight adjustment for 50g increments (least count 0.01 kg / 50g)
+  // Quick weight adjustment for 50g increments (least count 50g / 0.05 kg)
   const adjustNewWeight = (deltaKg: number) => {
-    setNewDispatchWeight((prev) => Math.max(0.01, Number((prev + deltaKg).toFixed(2))));
+    setNewDispatchWeight((prev) => Math.max(0.05, Number((Math.round((prev + deltaKg) * 20) / 20).toFixed(2))));
   };
 
   const adjustEditWeight = (deltaKg: number) => {
-    setEditWeight((prev) => Math.max(0.01, Number((prev + deltaKg).toFixed(2))));
+    setEditWeight((prev) => Math.max(0.05, Number((Math.round((prev + deltaKg) * 20) / 20).toFixed(2))));
   };
 
   // Toggle individual bundle checkbox for new challan
@@ -418,19 +418,20 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
             )}
 
             {/* + New Challan Button - Disabled if PO is Permanently Closed */}
-            {!isPermanentlyClosed && balanceRemaining > 0 && !isCreatingNew && (
+            {!isPermanentlyClosed && !isCreatingNew && (
               <button
                 type="button"
                 onClick={() => {
-                  setNewDispatchWeight(balanceRemaining);
-                  setNewBundlesCount(Math.max(1, Math.ceil(balanceRemaining / 28)));
+                  const defaultWeight = readyWeight > 0 ? readyWeight : (balanceRemaining > 0 ? balanceRemaining : 100);
+                  setNewDispatchWeight(defaultWeight);
+                  setNewBundlesCount(readyBundles.length > 0 ? readyBundles.length : Math.max(1, Math.ceil(defaultWeight / 28)));
                   setIsCreatingNew(true);
                   setIsEditingExisting(false);
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition shadow-xs"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>+ New Challan ({balanceRemaining.toLocaleString()} kg left)</span>
+                <span>+ New Challan {balanceRemaining > 0 ? `(${balanceRemaining.toLocaleString()} kg bal)` : ''}</span>
               </button>
             )}
 
@@ -645,10 +646,20 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
                 </div>
 
                 <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-3">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block">Available Balance to Dispatch</span>
-                  <span className="text-lg font-black text-emerald-800 font-mono">
-                    {balanceRemaining.toLocaleString()} <span className="text-xs font-semibold text-emerald-600">kg</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block">
+                    {dispatchedSoFar > job.incomingWeight ? 'Surplus / Additional Yield' : 'Available Balance to Dispatch'}
                   </span>
+                  <span className="text-lg font-black text-emerald-800 font-mono">
+                    {dispatchedSoFar > job.incomingWeight
+                      ? `+${Number((dispatchedSoFar - job.incomingWeight).toFixed(2)).toLocaleString()}`
+                      : balanceRemaining.toLocaleString()}{' '}
+                    <span className="text-xs font-semibold text-emerald-600">kg</span>
+                  </span>
+                  {dispatchedSoFar > job.incomingWeight && (
+                    <span className="text-[10px] text-emerald-700 font-medium block mt-0.5">
+                      Net dispatch exceeds inward (Permitted)
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -898,16 +909,15 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
                         Dispatch Net Weight (kg) *
                       </label>
                       <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-bold px-1.5 py-0.5 rounded">
-                        Least Count: 0.01 kg (50g certified)
+                        Least Count: 50g (0.05 kg)
                       </span>
                     </div>
 
                     <input
                       type="number"
                       required
-                      min={0.01}
-                      max={balanceRemaining > 0 ? balanceRemaining : job.incomingWeight}
-                      step="0.01"
+                      min={0.05}
+                      step="0.05"
                       value={newDispatchWeight}
                       onChange={(e) => {
                         const w = parseFloat(e.target.value) || 0;
@@ -966,8 +976,16 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
                       </button>
                     </div>
 
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Balance after this dispatch: <strong>{Math.max(0, balanceRemaining - newDispatchWeight).toFixed(2)} kg</strong>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      {newDispatchWeight + dispatchedSoFar > job.incomingWeight ? (
+                        <span className="text-blue-700 font-semibold">
+                          Total dispatch will be {Number((newDispatchWeight + dispatchedSoFar).toFixed(2))} kg (exceeds incoming {job.incomingWeight} kg — accepted).
+                        </span>
+                      ) : (
+                        <span>
+                          Balance after this dispatch: <strong>{Math.max(0, balanceRemaining - newDispatchWeight).toFixed(2)} kg</strong>
+                        </span>
+                      )}
                     </p>
                   </div>
 
@@ -1250,14 +1268,14 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
                           Dispatch Weight (kg)
                         </label>
                         <span className="text-[10px] text-emerald-800 bg-emerald-50 px-1 rounded font-mono font-bold">
-                          0.01 LC (50g)
+                          Least Count: 50g (0.05 kg)
                         </span>
                       </div>
                       <input
                         type="number"
                         required
-                        min={0.01}
-                        step="0.01"
+                        min={0.05}
+                        step="0.05"
                         value={editWeight}
                         onChange={(e) => setEditWeight(parseFloat(e.target.value) || 0)}
                         className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold"
@@ -1535,7 +1553,7 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
                           </span>
                         </div>
                         <span className="text-[10px] text-slate-300 font-mono">
-                          Scale Least Count: 0.01 kg (50g certified resolution)
+                          Scale Least Count: 50 g (0.05 kg certified resolution)
                         </span>
                       </div>
                       <table className="w-full text-left text-xs">
