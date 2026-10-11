@@ -1,47 +1,33 @@
 # Progressive Enterprises - Precision Slitting Works & Production Tracker
 
-Industrial production tracking, precision slitting management, customer portal, and delivery challan dispatch system for **Progressive Enterprises** (Pimpri Industrial Area, Pune).
+Industrial production tracking, precision slitting management, customer portal, and delivery challan dispatch system for **Progressive Enterprises** (Bhiwandi, Maharashtra).
 
 ---
 
 ## Key Features & Recent Updates
 
-### 1. Customer Company Locking & Clean Login
-- **Company Name Locked to Logged-in Account**: When a customer logs in (e.g., *qwe company*), the customer name and inward order submission are automatically and strictly locked to their authenticated company profile.
-- **Dedicated Customer Authentication**: Customer portal uses email/access code login with password verification.
-- **Removed Google Authentication from Customer Login**: Clean, focused interface for customer coordinators and purchase teams without third-party auth barriers.
-- **Optional Vehicle / Lorry Number**: Vehicle / lorry number is now optional across all forms (Material Inward Entry, Delivery Challan creation, and Challan revision).
+### 1. Delivery Challan Net Weight & Bundle Count Lock
+- **Strictly Derived from Bundle Selection**: In the Delivery Challan generation and edit modal, the net dispatch weight and total bundles count are non-editable and strictly locked to the ticked floor bundles in the selection checklist.
+- **Shop Floor Integration**: Each bundle displays its tag, gross weight, tare weight, and net weight with least count precision.
+- **Quick Selection Presets**: Presets (All Ready Bundles, Half Lot, Even Bundles, Odd Bundles) operate directly on the bundle checkboxes, guaranteeing that the weight and bundle count match the selected physical units.
+- **Challan Validation**: Challan generation requires at least 1 bundle to be ticked.
 
-### 2. WhatsApp Dispatch Advice
-- **Instant Launch**: One-click dispatch advice sending via **WhatsApp Web** (desktop) or **WhatsApp App** (mobile/desktop app).
-- **Formatted Message**: Generates clean, formatted text with emoji bullets containing:
-  - Delivery Challan No & Date
-  - Customer Name & PO Reference
-  - Material Grade & Thickness
-  - Dispatched Net Weight (kg) & Total Bundles
-  - Vehicle / Transporter Details
-  - Direct live portal link for digital verification
-- **Everywhere Accessible**: Available in:
-  - **Delivery Challan Manager**
-  - **Customer Portal** (under Issued Delivery Challans)
-  - **Factory Dashboard** (quick action button on dispatched jobs)
+### 2. Direct 1-Click Email Dispatch (`progressive.ent8@gmail.com`)
+- **Factory Sender Identity**: All customer dispatch notifications originate from the official factory email **progressive.ent8@gmail.com**.
+- **1-Click Seamless Workflow**: Directly opens Gmail with `progressive.ent8@gmail.com` pre-selected, pre-populating customer contacts, PO number, challan breakdown table, and vehicle details without third-party auth errors.
+- **Default Mail App & Clipboard**: One-click default mail client (`mailto:`) launch and full-text copy for maximum convenience.
 
-### 3. Official Gmail Dispatch Integration (`progressive.ent8@gmail.com`)
-- **Direct Gmail API Sending**: Configured with Google Workspace OAuth (`https://www.googleapis.com/auth/gmail.send`).
-- **Sender Identity**: Dispatches official e-Challan advice directly from `progressive.ent8@gmail.com` to all registered and authorized customer email addresses.
-- **Security & User Confirmation**:
-  - In-memory access token management (never exposed to persistent storage).
-  - Explicit user confirmation dialog before any email is dispatched.
-- **Rich HTML & Plain Text Templates**: Generates professional branded emails with dispatch summary tables, GST Rule 55 statutory notices, and download links.
-- **Reliable Fallbacks**:
-  - Direct Gmail API REST dispatch (`/gmail/v1/users/me/messages/send`)
-  - "Open in Gmail Web" composer fallback
-  - "Open in Default Mail Client (mailto:)" fallback
+### 3. WhatsApp Dispatch Advice
+- **Official Delivery Advice**: Pre-formatted WhatsApp advice with delivery challan number, customer PO, slitted material specifications, vehicle number, and plant address.
+- **Clean UI Placement**: WhatsApp and email dispatch buttons are organized exclusively inside the **Delivery Challan Manager** to keep the main dashboard and customer portal uncluttered.
 
-### 4. Precision Weighing & Statutory Compliance
-- **Weighing Scale Least Count**: Calibrated to 50g precision (0.05 kg).
-- **GST Rule 55 Compliance**: Job-work delivery challans with full statutory declarations and customer inspection clauses.
-- **HTML & Print PDF Export**: Standalone offline HTML challan files and print layouts.
+### 4. Factory Address Updated Across All Records
+- **Official Works Address**:
+  `Shed no. H-11/5,6, Shree Arihant Compound, Kalher, Bhiwandi, Maharashtra - 421302`
+- Applied uniformly across statutory challans, HTML exports, email dispatches, WhatsApp advice, and dashboard footers.
+
+### 5. Google Drive Links Removed
+- Removed Google Drive sync links across all views in preparation for dedicated relational database migration.
 
 ---
 
@@ -49,17 +35,15 @@ Industrial production tracking, precision slitting management, customer portal, 
 
 - **Framework**: React 19 + TypeScript + Vite 6
 - **Styling**: Tailwind CSS
-- **Authentication & OAuth**: Firebase SDK + Google Workspace OAuth (`gmail.send`)
 - **Icons**: Lucide React
-- **Hosting & Runtime**: Node.js / Vite SPA
+- **Hosting & Runtime**: Vite SPA / Node.js
 
 ---
 
-## Contact & Works Address
+## Works & Plant Address
 
 **Progressive Enterprises Precision Slitting Works**  
-Plot No. 42-45, Phase-II, Sector 58, Pimpri Industrial Area,  
-Pune, Maharashtra - 411018  
+Shed no. H-11/5,6, Shree Arihant Compound, Kalher, Bhiwandi, Maharashtra - 421302  
 - **Email**: `progressive.ent8@gmail.com`  
-- **Phone**: +91 98200 45678 / +91 20 2747 8899  
-- **GSTIN**: 27AABCP8841M1ZM  
+- **Phone**: +91 98200 45678  
+- **GSTIN**: 27AAACP1234F1Z8  

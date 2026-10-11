@@ -1118,7 +1118,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const scrapWeight = Number(params.scrapWeightKg) || 0;
 
     const driveFileName = `${challanNo.replace(/[\/\-]/g, '_')}_${job.customerName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
-    const drivePath = `${COMPANY_INFO.driveStorageFolder}/${driveFileName}`;
+    const drivePath = `Archive_2026/${driveFileName}`;
 
     const allAuthorizedEmails = customer?.authorizedEmails && customer.authorizedEmails.length > 0
       ? customer.authorizedEmails
@@ -1252,7 +1252,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       params.dispatchType === 'partial'
         ? `Partial Delivery Challan #${challanNo} Generated: ${dispatchWeight.toLocaleString()} kg`
         : `Final Delivery Challan #${challanNo} Generated: ${dispatchWeight.toLocaleString()} kg`,
-      `Challan #${challanNo} issued to ${job.customerName}. Dispatched ${dispatchWeight.toLocaleString()} kg in ${bundles} bundles via ${params.vehicleNo}. Emailed to ${allAuthorizedEmails.join(', ')} and saved in Google Drive.`
+      `Challan #${challanNo} issued to ${job.customerName}. Dispatched ${dispatchWeight.toLocaleString()} kg in ${bundles} bundles via ${params.vehicleNo}. Emailed to ${allAuthorizedEmails.join(', ')}.`
     );
 
     return newChallan;
@@ -1298,7 +1298,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
 
     const driveFileName = `${newChallanNo.replace(/[\/\-]/g, '_')}_${job.customerName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
-    const drivePath = `${COMPANY_INFO.driveStorageFolder}/${driveFileName}`;
+    const drivePath = `Archive_2026/${driveFileName}`;
     const newChallanId = 'dc-rev-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
 
     // Audit snapshot of the superseded revision

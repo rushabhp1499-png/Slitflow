@@ -3,14 +3,13 @@ import { Customer, MaterialInward, AppNotification, BundleRecord, FactoryUser } 
 export const COMPANY_INFO = {
   name: 'PROGRESSIVE ENTERPRISES',
   tagline: 'Precision Slitting, Shearing & Custom Reel/Bundle Packaging Works',
-  address: 'Plot No. 42-45, Phase-II, Sector 58, Pimpri Industrial Area, Pune, Maharashtra - 411018',
+  address: 'Shed no. H-11/5,6, Shree Arihant Compound, Kalher, Bhiwandi, Maharashtra - 421302',
   gstin: '27AAACP1234F1Z8',
   email: 'progressive.ent8@gmail.com',
   dispatchEmail: 'progressive.ent8@gmail.com',
-  phone: '+91 98200 45678 / +91 20 2748 9900',
+  phone: '+91 98200 45678',
   isoCert: 'ISO 9001:2015 Certified Job-Work Facility',
   plantHead: 'Rajesh Patel (Works Director & Plant Head)',
-  driveStorageFolder: 'Google Drive / Progressive_Enterprises_Archive / Delivery_Challans_2026',
 };
 
 export const INITIAL_FACTORY_USERS: FactoryUser[] = [

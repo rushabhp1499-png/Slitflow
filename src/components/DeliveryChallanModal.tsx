@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MaterialInward, DeliveryChallan } from '../types';
 import { useProduction } from '../context/ProductionContext';
 import { COMPANY_INFO } from '../data/mockData';
@@ -50,8 +50,6 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
     deleteDeliveryChallan,
     sendChallanEmail,
     customers,
-    driveWebLink,
-    setDriveWebLink,
     addMultipleBundlesToJob,
   } = useProduction();
 
@@ -76,9 +74,6 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
   // If there are no challans yet and PO is open, default to creating a new one
   const [isCreatingNew, setIsCreatingNew] = useState<boolean>(existingChallans.length === 0 && !isPermanentlyClosed);
   const [isEditingExisting, setIsEditingExisting] = useState<boolean>(false);
-  const [showDriveSettings, setShowDriveSettings] = useState<boolean>(false);
-  const [customDriveInput, setCustomDriveInput] = useState<string>(driveWebLink);
-  const [copiedDrivePath, setCopiedDrivePath] = useState(false);
   const [emailAlert, setEmailAlert] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -105,16 +100,13 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
     readyBundles.map((b) => b.id)
   );
 
-  // Form State for New Challan
-  const initialWeight = readyWeight > 0 ? readyWeight : balanceRemaining;
-  const [newDispatchWeight, setNewDispatchWeight] = useState<number>(initialWeight > 0 ? initialWeight : 500);
+  // Strictly computed from selected bundles list - GUARANTEED equal to selected items from the list above
+  const selectedBundles = readyBundles.filter((b) => selectedBundleIds.includes(b.id));
+  const newDispatchWeight = Number(selectedBundles.reduce((sum, b) => sum + b.netWeightKg, 0).toFixed(2));
+  const newBundlesCount = selectedBundles.length;
+
   const [newVehicleNo, setNewVehicleNo] = useState<string>(job.vehicleNo && job.vehicleNo !== '—' ? job.vehicleNo : '');
   const [newTransporter, setNewTransporter] = useState<string>('Express Road Lines');
-  const [newBundlesCount, setNewBundlesCount] = useState<number>(
-    readyBundles.length > 0
-      ? readyBundles.length
-      : Math.max(1, Math.ceil((initialWeight > 0 ? initialWeight : 500) / 28))
-  );
   const [newEWayBill, setNewEWayBill] = useState<string>(
     `2419${Math.floor(10000000 + Math.random() * 90000000)}`
   );
@@ -131,82 +123,60 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
     (job.bundles || []).filter((b) => b.dispatchedInChallanId === activeChallan?.id).map((b) => b.id)
   );
 
-  // Form State for Editing an existing Challan
-  const [editWeight, setEditWeight] = useState<number>(activeChallan?.thisDispatchWeightKg || 0);
-  const [editBundlesCount, setEditBundlesCount] = useState<number>(activeChallan?.totalBundles || 1);
+  // Strictly computed for editing existing challan
+  const editEligibleBundles = (job.bundles || []).filter(
+    (b) => b.dispatchedInChallanId === activeChallan?.id || b.status === 'ready'
+  );
+  const editPickedBundles = editEligibleBundles.filter((b) => editSelectedBundleIds.includes(b.id));
+  const editWeight = Number(editPickedBundles.reduce((sum, b) => sum + b.netWeightKg, 0).toFixed(2));
+  const editBundlesCount = editPickedBundles.length;
+
   const [editVehicleNo, setEditVehicleNo] = useState<string>(activeChallan?.vehicleNo || '');
   const [editTransporter, setEditTransporter] = useState<string>(activeChallan?.transporterName || '');
   const [editEWayBill, setEditEWayBill] = useState<string>(activeChallan?.eWayBillNo || '');
 
-  // Quick weight adjustment for 50g increments (least count 50g / 0.05 kg)
-  const adjustNewWeight = (deltaKg: number) => {
-    setNewDispatchWeight((prev) => Math.max(0.05, Number((Math.round((prev + deltaKg) * 20) / 20).toFixed(2))));
-  };
+  // Auto-stage floor bundles if job doesn't have any bundles yet
+  useEffect(() => {
+    if (!job.bundles || job.bundles.length === 0) {
+      handleAutoStageBundles();
+    }
+  }, [job.id]);
 
-  const adjustEditWeight = (deltaKg: number) => {
-    setEditWeight((prev) => Math.max(0.05, Number((Math.round((prev + deltaKg) * 20) / 20).toFixed(2))));
-  };
+  useEffect(() => {
+    if (readyBundles.length > 0 && selectedBundleIds.length === 0 && !isCreatingNew) {
+      setSelectedBundleIds(readyBundles.map((b) => b.id));
+    }
+  }, [job.bundles]);
 
   // Toggle individual bundle checkbox for new challan
   const toggleBundleSelection = (bundleId: string) => {
-    setSelectedBundleIds((prev) => {
-      const next = prev.includes(bundleId)
-        ? prev.filter((id) => id !== bundleId)
-        : [...prev, bundleId];
-
-      const picked = readyBundles.filter((b) => next.includes(b.id));
-      if (picked.length > 0) {
-        const totalNet = Number(picked.reduce((sum, b) => sum + b.netWeightKg, 0).toFixed(2));
-        setNewDispatchWeight(totalNet);
-        setNewBundlesCount(picked.length);
-      } else {
-        setNewDispatchWeight(0);
-        setNewBundlesCount(0);
-      }
-      return next;
-    });
+    setSelectedBundleIds((prev) =>
+      prev.includes(bundleId) ? prev.filter((id) => id !== bundleId) : [...prev, bundleId]
+    );
   };
 
-  // Quick selection presets
+  // Quick selection presets - Strictly operating on the bundle checklist
   const selectAllReadyBundles = () => {
-    const allIds = readyBundles.map((b) => b.id);
-    setSelectedBundleIds(allIds);
-    const totalNet = Number(readyBundles.reduce((sum, b) => sum + b.netWeightKg, 0).toFixed(2));
-    setNewDispatchWeight(totalNet);
-    setNewBundlesCount(allIds.length);
+    setSelectedBundleIds(readyBundles.map((b) => b.id));
   };
 
   const clearAllBundleSelections = () => {
     setSelectedBundleIds([]);
-    setNewDispatchWeight(0);
-    setNewBundlesCount(0);
   };
 
   const selectEvenBundles = () => {
     const evens = readyBundles.filter((_, idx) => (idx + 1) % 2 === 0);
-    const evenIds = evens.map((b) => b.id);
-    setSelectedBundleIds(evenIds);
-    const totalNet = Number(evens.reduce((sum, b) => sum + b.netWeightKg, 0).toFixed(2));
-    setNewDispatchWeight(totalNet);
-    setNewBundlesCount(evenIds.length);
+    setSelectedBundleIds(evens.map((b) => b.id));
   };
 
   const selectOddBundles = () => {
     const odds = readyBundles.filter((_, idx) => (idx + 1) % 2 !== 0);
-    const oddIds = odds.map((b) => b.id);
-    setSelectedBundleIds(oddIds);
-    const totalNet = Number(odds.reduce((sum, b) => sum + b.netWeightKg, 0).toFixed(2));
-    setNewDispatchWeight(totalNet);
-    setNewBundlesCount(oddIds.length);
+    setSelectedBundleIds(odds.map((b) => b.id));
   };
 
   const selectFirstNBundles = (n: number) => {
     const subset = readyBundles.slice(0, n);
-    const subsetIds = subset.map((b) => b.id);
-    setSelectedBundleIds(subsetIds);
-    const totalNet = Number(subset.reduce((sum, b) => sum + b.netWeightKg, 0).toFixed(2));
-    setNewDispatchWeight(totalNet);
-    setNewBundlesCount(subsetIds.length);
+    setSelectedBundleIds(subset.map((b) => b.id));
   };
 
   // Auto-generate floor bundles if job doesn't have any bundles yet
@@ -242,30 +212,14 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
       };
     });
     const created = addMultipleBundlesToJob(job.id, bundlesToCreate);
-    const createdIds = created.map((b) => b.id);
-    setSelectedBundleIds(createdIds);
-    setNewDispatchWeight(targetWeight);
-    setNewBundlesCount(created.length);
+    setSelectedBundleIds(created.map((b) => b.id));
   };
 
   // Toggle bundle selection when editing an existing challan
   const toggleEditBundleSelection = (bundleId: string) => {
-    setEditSelectedBundleIds((prev) => {
-      const next = prev.includes(bundleId)
-        ? prev.filter((id) => id !== bundleId)
-        : [...prev, bundleId];
-
-      const allEligible = (job.bundles || []).filter((b) => next.includes(b.id));
-      if (allEligible.length > 0) {
-        const totalNet = Number(allEligible.reduce((sum, b) => sum + b.netWeightKg, 0).toFixed(2));
-        setEditWeight(totalNet);
-        setEditBundlesCount(allEligible.length);
-      } else {
-        setEditWeight(0);
-        setEditBundlesCount(0);
-      }
-      return next;
-    });
+    setEditSelectedBundleIds((prev) =>
+      prev.includes(bundleId) ? prev.filter((id) => id !== bundleId) : [...prev, bundleId]
+    );
   };
 
   // When switching active challan, update edit form fields
@@ -275,8 +229,6 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
     setIsEditingExisting(false);
     const target = existingChallans.find((c) => c.id === challanId);
     if (target) {
-      setEditWeight(target.thisDispatchWeightKg);
-      setEditBundlesCount(target.totalBundles);
       setEditVehicleNo(target.vehicleNo);
       setEditTransporter(target.transporterName);
       setEditEWayBill(target.eWayBillNo || '');
@@ -288,8 +240,6 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
 
   const handleStartEdit = () => {
     if (!activeChallan) return;
-    setEditWeight(activeChallan.thisDispatchWeightKg);
-    setEditBundlesCount(activeChallan.totalBundles);
     setEditVehicleNo(activeChallan.vehicleNo);
     setEditTransporter(activeChallan.transporterName);
     setEditEWayBill(activeChallan.eWayBillNo || '');
@@ -349,24 +299,6 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
     }
   };
 
-  const handleOpenGoogleDrive = () => {
-    window.open(driveWebLink, '_blank', 'noopener,noreferrer');
-  };
-
-  const handleCopyDriveFolder = () => {
-    navigator.clipboard.writeText(COMPANY_INFO.driveStorageFolder);
-    setCopiedDrivePath(true);
-    setTimeout(() => setCopiedDrivePath(false), 2500);
-  };
-
-  const handleSaveCustomDriveUrl = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (customDriveInput.trim()) {
-      setDriveWebLink(customDriveInput.trim());
-    }
-    setShowDriveSettings(false);
-  };
-
   const handleDownload = () => {
     if (!activeChallan) return;
     downloadChallanAsHtml(activeChallan, job);
@@ -421,7 +353,7 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
 🔗 *Live Tracking & Digital Challan:*
 ${trackingUrl}
 
-_Progressive Enterprises Precision Slitting Works, Pune_
+_Progressive Enterprises Precision Slitting Works, Bhiwandi_
 _Official Dispatch Email: progressive.ent8@gmail.com_`;
   };
 
@@ -457,7 +389,7 @@ This advice was dispatched from our official email ID: progressive.ent8@gmail.co
 
 For any inquiries or dispatch reconciliation, please reach out to:
 Progressive Enterprises Precision Slitting Works
-Plot No. 42-45, Phase-II, Sector 58, Pimpri Industrial Area, Pune, Maharashtra - 411018
+Shed no. H-11/5,6, Shree Arihant Compound, Kalher, Bhiwandi, Maharashtra - 421302
 Email: progressive.ent8@gmail.com
 Phone: +91 98200 45678`;
   };
@@ -480,7 +412,7 @@ Phone: +91 98200 45678`;
     if (!activeChallan) return;
     const body = getEmailBodyText();
     const cleanEmails = emailRecipients.split(',').map(e => e.trim()).filter(Boolean).join(',');
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(cleanEmails)}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(body)}`;
+    const gmailUrl = `https://mail.google.com/mail/?authuser=progressive.ent8@gmail.com&view=cm&fs=1&to=${encodeURIComponent(cleanEmails)}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(body)}`;
     window.open(gmailUrl, '_blank', 'noopener,noreferrer');
     sendChallanEmail(job.id, activeChallan.id, emailRecipients);
     setIsEmailModalOpen(false);
@@ -552,9 +484,7 @@ Phone: +91 98200 45678`;
               <button
                 type="button"
                 onClick={() => {
-                  const defaultWeight = readyWeight > 0 ? readyWeight : (balanceRemaining > 0 ? balanceRemaining : 100);
-                  setNewDispatchWeight(defaultWeight);
-                  setNewBundlesCount(readyBundles.length > 0 ? readyBundles.length : Math.max(1, Math.ceil(defaultWeight / 28)));
+                  setSelectedBundleIds(readyBundles.map((b) => b.id));
                   setIsCreatingNew(true);
                   setIsEditingExisting(false);
                 }}
@@ -575,105 +505,6 @@ Phone: +91 98200 45678`;
             </button>
           </div>
         </div>
-
-        {/* Google Drive Active Integration Banner */}
-        <div className="no-print bg-amber-50/70 border-b border-amber-200/60 px-5 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="p-1 bg-amber-100 text-amber-800 rounded-md shrink-0">
-              <FolderOpen className="w-4 h-4" />
-            </span>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-800">Google Drive Archive:</span>
-                <span className="text-[11px] text-slate-500 hidden sm:inline">
-                  All challans are stored in your company cloud drive
-                </span>
-              </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <code className="text-[11px] font-mono text-amber-900 truncate max-w-xs sm:max-w-md bg-white/80 px-1.5 py-0.5 rounded border border-amber-200">
-                  {driveWebLink}
-                </code>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Direct Open Google Drive in new tab */}
-            <button
-              type="button"
-              onClick={handleOpenGoogleDrive}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold rounded-lg transition shadow-xs"
-              title="Open Google Drive folder in a new browser tab"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span>Open Google Drive</span>
-            </button>
-
-            {/* Configure Drive link */}
-            <button
-              type="button"
-              onClick={() => setShowDriveSettings(!showDriveSettings)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold rounded-lg transition"
-              title="Configure Google Drive folder link"
-            >
-              <Link2 className="w-3.5 h-3.5 text-slate-500" />
-              <span>Change Link</span>
-            </button>
-
-            {/* Copy folder path */}
-            <button
-              type="button"
-              onClick={handleCopyDriveFolder}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-semibold rounded-lg transition"
-            >
-              {copiedDrivePath ? (
-                <>
-                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  <span className="text-emerald-700 font-bold">Path Copied!</span>
-                </>
-              ) : (
-                <span>Copy Path</span>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Configure Drive Popover / Form */}
-        {showDriveSettings && (
-          <form
-            onSubmit={handleSaveCustomDriveUrl}
-            className="no-print bg-slate-100 border-b border-slate-300 p-4 flex flex-wrap items-center gap-3 text-xs"
-          >
-            <div className="flex-1 min-w-[280px]">
-              <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
-                Your Company Google Drive Folder URL:
-              </label>
-              <input
-                type="url"
-                required
-                value={customDriveInput}
-                onChange={(e) => setCustomDriveInput(e.target.value)}
-                placeholder="https://drive.google.com/drive/folders/YOUR_FOLDER_ID"
-                className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono text-slate-900 focus:ring-2 focus:ring-blue-600"
-              />
-            </div>
-            <div className="flex items-center gap-2 pt-4">
-              <button
-                type="submit"
-                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-xs shadow-xs"
-              >
-                Save Drive URL
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowDriveSettings(false)}
-                className="px-3 py-1.5 text-slate-600 hover:bg-slate-200 rounded-lg font-semibold text-xs"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
 
         {/* Email feedback alert */}
         {emailAlert && (
@@ -793,54 +624,55 @@ Phone: +91 98200 45678`;
                 </div>
               </div>
 
-              {/* Quick Weight Presets */}
+              {/* Quick Bundle Selection Presets */}
               <div className="mb-5">
                 <label className="block text-xs font-bold text-slate-700 mb-2">
-                  Quick Presets:
+                  Quick Bundle Selection Presets:
                 </label>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      setNewDispatchWeight(balanceRemaining);
-                      setNewBundlesCount(Math.max(1, Math.ceil(balanceRemaining / 28)));
-                    }}
-                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-xs font-bold transition"
+                    onClick={selectAllReadyBundles}
+                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                   >
-                    ⚡ Full Balance ({balanceRemaining.toLocaleString()} kg)
+                    <span>⚡ Select All Ready Bundles</span>
+                    <span className="font-mono text-[11px]">({readyBundles.length} bundles • {readyWeight.toFixed(2)} kg)</span>
                   </button>
-                  {balanceRemaining > 500 && (
+                  {readyBundles.length >= 2 && (
                     <button
                       type="button"
-                      onClick={() => {
-                        const half = Math.round(balanceRemaining / 2);
-                        setNewDispatchWeight(half);
-                        setNewBundlesCount(Math.max(1, Math.ceil(half / 28)));
-                      }}
-                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-800 rounded-lg text-xs font-bold transition"
+                      onClick={() => selectFirstNBundles(Math.max(1, Math.ceil(readyBundles.length / 2)))}
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-800 rounded-lg text-xs font-bold transition cursor-pointer"
                     >
-                      📦 Half Lot ({Math.round(balanceRemaining / 2).toLocaleString()} kg)
-                    </button>
-                  )}
-                  {readyWeight > 0 && (
-                    <button
-                      type="button"
-                      onClick={selectAllReadyBundles}
-                      className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 rounded-lg text-xs font-bold transition"
-                    >
-                      ⚖️ All Ready Floor Bundles ({readyWeight.toLocaleString()} kg / {readyBundles.length} bundles)
+                      📦 First Half Lot ({Math.ceil(readyBundles.length / 2)} bundles)
                     </button>
                   )}
                   {readyBundles.length >= 2 && (
                     <button
                       type="button"
                       onClick={selectEvenBundles}
-                      className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 border border-purple-300 text-purple-800 rounded-lg text-xs font-bold transition"
+                      className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 border border-purple-300 text-purple-800 rounded-lg text-xs font-bold transition cursor-pointer"
                       title="Dispatch Bundles #2, #4, #6... and keep odd bundles on shop floor"
                     >
                       🎯 Even Bundles (#2, #4...)
                     </button>
                   )}
+                  {readyBundles.length >= 2 && (
+                    <button
+                      type="button"
+                      onClick={selectOddBundles}
+                      className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 border border-purple-300 text-purple-800 rounded-lg text-xs font-bold transition cursor-pointer"
+                    >
+                      🎯 Odd Bundles (#1, #3...)
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={clearAllBundleSelections}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold transition cursor-pointer"
+                  >
+                    Clear All
+                  </button>
                 </div>
               </div>
 
@@ -1031,108 +863,57 @@ Phone: +91 98200 45678`;
                   )}
                 </div>
 
-                {/* Primary Weighment and Dispatch Inputs */}
+                {/* Primary Weighment and Dispatch Inputs - Strictly Locked to Bundle Selection */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-xs font-bold text-slate-800">
                         Dispatch Net Weight (kg) *
                       </label>
-                      <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-bold px-1.5 py-0.5 rounded">
-                        Least Count: 50g (0.05 kg)
+                      <span className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 font-mono font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <Lock className="w-3 h-3 text-amber-600" />
+                        Locked to Selected Bundles
                       </span>
                     </div>
 
-                    <input
-                      type="number"
-                      required
-                      min={0.05}
-                      step="0.05"
-                      value={newDispatchWeight}
-                      onChange={(e) => {
-                        const w = parseFloat(e.target.value) || 0;
-                        setNewDispatchWeight(w);
-                        if (readyBundles.length === 0) {
-                          setNewBundlesCount(Math.max(1, Math.ceil(w / 28)));
-                        }
-                      }}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-mono font-black text-slate-900 focus:ring-2 focus:ring-blue-600"
-                    />
-
-                    {/* 50g Increment / Decrement Step Buttons */}
-                    <div className="mt-1.5 flex items-center gap-1 flex-wrap">
-                      <span className="text-[10px] font-bold text-slate-500 mr-1">50g Steps:</span>
-                      <button
-                        type="button"
-                        onClick={() => adjustNewWeight(-0.10)}
-                        className="px-1.5 py-0.5 text-[10px] font-mono bg-slate-100 hover:bg-slate-200 text-slate-700 rounded border border-slate-200 font-bold"
-                      >
-                        -100g
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => adjustNewWeight(-0.05)}
-                        className="px-1.5 py-0.5 text-[10px] font-mono bg-slate-100 hover:bg-slate-200 text-slate-700 rounded border border-slate-200 font-bold"
-                      >
-                        -50g
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => adjustNewWeight(0.05)}
-                        className="px-1.5 py-0.5 text-[10px] font-mono bg-blue-50 hover:bg-blue-100 text-blue-800 rounded border border-blue-200 font-bold"
-                      >
-                        +50g
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => adjustNewWeight(0.10)}
-                        className="px-1.5 py-0.5 text-[10px] font-mono bg-blue-50 hover:bg-blue-100 text-blue-800 rounded border border-blue-200 font-bold"
-                      >
-                        +100g
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => adjustNewWeight(0.15)}
-                        className="px-1.5 py-0.5 text-[10px] font-mono bg-blue-50 hover:bg-blue-100 text-blue-800 rounded border border-blue-200 font-bold"
-                      >
-                        +150g
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => adjustNewWeight(0.20)}
-                        className="px-1.5 py-0.5 text-[10px] font-mono bg-blue-50 hover:bg-blue-100 text-blue-800 rounded border border-blue-200 font-bold"
-                      >
-                        +200g
-                      </button>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        readOnly
+                        disabled
+                        tabIndex={-1}
+                        value={`${newDispatchWeight.toFixed(2)} kg net`}
+                        className="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-xl text-sm font-mono font-black text-slate-900 cursor-not-allowed select-none focus:outline-none"
+                      />
                     </div>
 
                     <p className="text-[11px] text-slate-500 mt-1">
-                      {newDispatchWeight + dispatchedSoFar > job.incomingWeight ? (
-                        <span className="text-blue-700 font-semibold">
-                          Total dispatch will be {Number((newDispatchWeight + dispatchedSoFar).toFixed(2))} kg (exceeds incoming {job.incomingWeight} kg — accepted).
-                        </span>
-                      ) : (
-                        <span>
-                          Balance after this dispatch: <strong>{Math.max(0, balanceRemaining - newDispatchWeight).toFixed(2)} kg</strong>
-                        </span>
-                      )}
+                      Strictly calculated from the <strong>{newBundlesCount}</strong> selected bundle(s) above ({newDispatchWeight.toFixed(2)} kg). Non-editable.
                     </p>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      Total Bundles Count *
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      min={1}
-                      value={newBundlesCount}
-                      onChange={(e) => setNewBundlesCount(parseInt(e.target.value, 10) || 1)}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-mono font-bold text-slate-900 focus:ring-2 focus:ring-blue-600"
-                    />
-                    <p className="text-[11px] text-slate-400 mt-1">
-                      Average ~{(newDispatchWeight / Math.max(1, newBundlesCount)).toFixed(2)} kg per bundle
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-800">
+                        Total Bundles Count *
+                      </label>
+                      <span className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 font-mono font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <Lock className="w-3 h-3 text-amber-600" />
+                        Locked to Selected Bundles
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        readOnly
+                        disabled
+                        tabIndex={-1}
+                        value={`${newBundlesCount} bundles`}
+                        className="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-xl text-sm font-mono font-bold text-slate-900 cursor-not-allowed select-none focus:outline-none"
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      Strictly equals the <strong>{newBundlesCount}</strong> bundle(s) ticked in the list above. Non-editable.
                     </p>
                   </div>
 
@@ -1202,10 +983,19 @@ Phone: +91 98200 45678`;
                   )}
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md hover:shadow-lg transition"
+                    disabled={newBundlesCount === 0 || newDispatchWeight <= 0}
+                    className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold shadow-md transition ${
+                      newBundlesCount === 0 || newDispatchWeight <= 0
+                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white hover:shadow-lg cursor-pointer'
+                    }`}
                   >
                     <FileText className="w-4 h-4" />
-                    <span>Generate Delivery Challan ({newDispatchWeight.toFixed(2)} kg / {newBundlesCount} Bundles)</span>
+                    <span>
+                      {newBundlesCount === 0
+                        ? 'Select Bundles Above to Generate Challan'
+                        : `Generate Delivery Challan (${newDispatchWeight.toFixed(2)} kg / ${newBundlesCount} Bundles)`}
+                    </span>
                   </button>
                 </div>
               </form>
@@ -1427,56 +1217,43 @@ Phone: +91 98200 45678`;
                         <label className="block text-xs font-bold text-slate-700">
                           Dispatch Weight (kg)
                         </label>
-                        <span className="text-[10px] text-emerald-800 bg-emerald-50 px-1 rounded font-mono font-bold">
-                          Least Count: 50g (0.05 kg)
+                        <span className="text-[10px] text-slate-600 bg-slate-100 px-1 rounded font-mono font-bold flex items-center gap-1">
+                          <Lock className="w-3 h-3 text-slate-400" /> Locked
                         </span>
                       </div>
                       <input
-                        type="number"
-                        required
-                        min={0.05}
-                        step="0.05"
-                        value={editWeight}
-                        onChange={(e) => setEditWeight(parseFloat(e.target.value) || 0)}
-                        className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold"
+                        type="text"
+                        readOnly
+                        disabled
+                        tabIndex={-1}
+                        value={`${editWeight.toFixed(2)} kg`}
+                        className="w-full px-3 py-1.5 bg-slate-100 border border-slate-300 rounded-lg text-xs font-mono font-bold cursor-not-allowed select-none text-slate-800"
                       />
-                      <div className="mt-1 flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => adjustEditWeight(-0.05)}
-                          className="px-1.5 py-0.5 text-[10px] font-mono bg-white border border-slate-300 rounded text-slate-700 hover:bg-slate-100"
-                        >
-                          -50g
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => adjustEditWeight(0.05)}
-                          className="px-1.5 py-0.5 text-[10px] font-mono bg-white border border-slate-300 rounded text-blue-700 font-bold hover:bg-blue-50"
-                        >
-                          +50g
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => adjustEditWeight(0.10)}
-                          className="px-1.5 py-0.5 text-[10px] font-mono bg-white border border-slate-300 rounded text-blue-700 font-bold hover:bg-blue-50"
-                        >
-                          +100g
-                        </button>
-                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Derived from {editSelectedBundleIds.length} checked bundle(s)
+                      </p>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Bundles Count
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold text-slate-700">
+                          Bundles Count
+                        </label>
+                        <span className="text-[10px] text-slate-600 bg-slate-100 px-1 rounded font-mono font-bold flex items-center gap-1">
+                          <Lock className="w-3 h-3 text-slate-400" /> Locked
+                        </span>
+                      </div>
                       <input
-                        type="number"
-                        required
-                        min={1}
-                        value={editBundlesCount}
-                        onChange={(e) => setEditBundlesCount(parseInt(e.target.value, 10) || 1)}
-                        className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold"
+                        type="text"
+                        readOnly
+                        disabled
+                        tabIndex={-1}
+                        value={`${editBundlesCount} bundles`}
+                        className="w-full px-3 py-1.5 bg-slate-100 border border-slate-300 rounded-lg text-xs font-mono font-bold cursor-not-allowed select-none text-slate-800"
                       />
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Equals {editSelectedBundleIds.length} checked bundle(s)
+                      </p>
                     </div>
 
                     <div>
@@ -1784,7 +1561,7 @@ Phone: +91 98200 45678`;
                     <p className="font-bold text-slate-800">Terms & Statutory Declarations:</p>
                     <p>1. Goods dispatched for Job-Work processing under GST Rule 55. Not for outright sale.</p>
                     <p>2. Customer to inspect bundle tags and confirm weighment within 24 hours of arrival.</p>
-                    <p>3. Subject to Pune jurisdiction only.</p>
+                    <p>3. Subject to Bhiwandi / Thane jurisdiction only.</p>
                   </div>
 
                   <div className="text-right shrink-0">

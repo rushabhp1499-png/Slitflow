@@ -171,8 +171,8 @@ VIEW & PRINT DIGITAL CHALLAN:
 ${url}
 
 Official Dispatch Email: progressive.ent8@gmail.com
-Works Address: Plot No. 42-45, Phase-II, Sector 58, Pimpri Industrial Area, Pune - 411018
-Contact: +91 98200 45678 / +91 20 2747 8899
+Works Address: Shed no. H-11/5,6, Shree Arihant Compound, Kalher, Bhiwandi, Maharashtra - 421302
+Contact: +91 98200 45678
 
 Best regards,
 Dispatch In-Charge
@@ -283,7 +283,7 @@ Progressive Enterprises Precision Slitting Works`;
         <!-- Sender & Company Footer -->
         <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; margin-top: 24px; font-size: 12px; color: #64748b; line-height: 1.6;">
           <p style="margin: 0; font-weight: 700; color: #0f172a;">Progressive Enterprises Precision Slitting Works</p>
-          <p style="margin: 2px 0;">Plot No. 42-45, Phase-II, Sector 58, Pimpri Industrial Area, Pune, Maharashtra - 411018</p>
+          <p style="margin: 2px 0;">Shed no. H-11/5,6, Shree Arihant Compound, Kalher, Bhiwandi, Maharashtra - 421302</p>
           <p style="margin: 2px 0;">Official Dispatch Email: <a href="mailto:progressive.ent8@gmail.com" style="color: #2563eb;">progressive.ent8@gmail.com</a> | Phone: +91 98200 45678</p>
           <p style="margin: 2px 0; font-size: 11px; color: #94a3b8;">GSTIN: 27AABCP8841M1ZM • ISO 9001:2015 Certified Slitting Facility</p>
         </div>

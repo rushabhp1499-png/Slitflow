@@ -68,8 +68,8 @@ function MainAppContent() {
         <main className="flex-1 flex flex-col justify-center items-center">
           <LoginPage />
         </main>
-        <footer className="no-print bg-white border-t border-slate-200 text-slate-500 py-4 text-xs text-center">
-          {COMPANY_INFO.name} • Industrial Precision Slitting Facility • Pune, Maharashtra
+        <footer className="no-print bg-white border-t border-slate-200 text-slate-500 py-4 text-xs text-center px-4">
+          {COMPANY_INFO.name} • Industrial Precision Slitting Facility • Shed no. H-11/5,6, Shree Arihant Compound, Kalher, Bhiwandi, Maharashtra - 421302
         </footer>
       </div>
     );
@@ -174,7 +174,7 @@ function MainAppContent() {
             <span>{COMPANY_INFO.isoCert}</span>
           </div>
           <div className="text-slate-400 text-center sm:text-right">
-            Plant: Plot 42-45, Phase II, Sector 58, Pimpri MIDC, Pune • Support: {COMPANY_INFO.phone.split('/')[0]}
+            Plant: Shed no. H-11/5,6, Shree Arihant Compound, Kalher, Bhiwandi, Maharashtra - 421302 • Support: {COMPANY_INFO.phone.split('/')[0]}
           </div>
         </div>
       </footer>

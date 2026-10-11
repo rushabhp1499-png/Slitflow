@@ -57,8 +57,7 @@ export const WhatsAppDispatchModal: React.FC<WhatsAppDispatchModalProps> = ({
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 🔗 *Live Tracking & Digital Challan:*
 ${trackingUrl}
-${customNotes ? `\n📝 *Notes:* ${customNotes}\n` : ''}
-_Progressive Enterprises Precision Slitting Works, Pune_
+📍 _Works: Shed no. H-11/5,6, Shree Arihant Compound, Kalher, Bhiwandi, Maharashtra - 421302_
 _Official Dispatch Email: progressive.ent8@gmail.com_`;
     }
 
@@ -75,7 +74,7 @@ ${job.bundles ? `📦 *Completed Bundles:* ${job.bundles.filter(b => b.status ==
 🔗 *Live Tracking & Portal:*
 ${trackingUrl}
 ${customNotes ? `\n📝 *Notes:* ${customNotes}\n` : ''}
-_Progressive Enterprises Precision Slitting Works, Pune_
+📍 _Works: Shed no. H-11/5,6, Shree Arihant Compound, Kalher, Bhiwandi, Maharashtra - 421302_
 _Official Dispatch Email: progressive.ent8@gmail.com_`;
   };
 

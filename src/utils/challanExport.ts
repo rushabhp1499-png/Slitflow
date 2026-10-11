@@ -316,7 +316,7 @@ export function downloadChallanAsHtml(challan: DeliveryChallan, job: MaterialInw
       <ol>
         <li>Goods dispatched solely for Job-Work processing under Rule 55 of CGST Act. Not an outright commercial sale.</li>
         <li>Customer must inspect bundle tags, net weighment, and notify discrepancies within 24 hours of delivery.</li>
-        <li>Subject to Pune jurisdiction.</li>
+        <li>Subject to Bhiwandi / Thane jurisdiction.</li>
       </ol>
     </div>
 
