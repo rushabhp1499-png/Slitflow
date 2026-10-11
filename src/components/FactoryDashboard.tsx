@@ -727,7 +727,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                                 title="View official printable delivery challan(s) or generate new challan"
                               >
                                 <FileText className="w-3.5 h-3.5 text-emerald-400" />
-                                <span>{challanCount} Challan{challanCount > 1 ? 's' : ''} (View / +New)</span>
+                                <span>{challanCount} Challan{challanCount > 1 ? 's' : ''}</span>
                               </button>
                             ) : (
                               /* Allow generating challan for any inward order */

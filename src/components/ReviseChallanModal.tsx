@@ -141,14 +141,14 @@ export const ReviseChallanModal: React.FC<ReviseChallanModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Vehicle No:
+                  Vehicle No <span className="text-slate-400 font-normal">(Optional)</span>:
                 </label>
                 <input
                   type="text"
                   value={vehicleNo}
                   onChange={(e) => setVehicleNo(e.target.value.toUpperCase())}
+                  placeholder="e.g. DL-01-AB-4450 (Optional)"
                   className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-mono font-bold uppercase text-slate-900"
-                  required
                 />
               </div>
 

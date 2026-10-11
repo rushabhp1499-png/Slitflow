@@ -5,8 +5,8 @@ export const COMPANY_INFO = {
   tagline: 'Precision Slitting, Shearing & Custom Reel/Bundle Packaging Works',
   address: 'Plot No. 42-45, Phase-II, Sector 58, Pimpri Industrial Area, Pune, Maharashtra - 411018',
   gstin: '27AAACP1234F1Z8',
-  email: 'production@progressive-enterprises.com',
-  dispatchEmail: 'dispatch@progressive-enterprises.com',
+  email: 'progressive.ent8@gmail.com',
+  dispatchEmail: 'progressive.ent8@gmail.com',
   phone: '+91 98200 45678 / +91 20 2748 9900',
   isoCert: 'ISO 9001:2015 Certified Job-Work Facility',
   plantHead: 'Rajesh Patel (Works Director & Plant Head)',
@@ -66,6 +66,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     name: 'PackWell Flexible Packaging',
     companyName: 'PackWell Flexible Packaging Solutions Pvt. Ltd.',
     email: 'supplychain@packwellflex.com',
+    password: 'Client@123',
     authorizedEmails: [
       'supplychain@packwellflex.com',
       'procurement@packwellflex.com',
@@ -87,6 +88,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     name: 'AutoTech Precision Ancillaries',
     companyName: 'AutoTech Precision Ancillaries Pvt. Ltd.',
     email: 'procurement@autotech-india.com',
+    password: 'Client@123',
     authorizedEmails: [
       'procurement@autotech-india.com',
       'stores@autotech-india.com',
@@ -107,6 +109,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     name: 'ElectroCorp Transformers',
     companyName: 'ElectroCorp Transformers & Laminations Ltd.',
     email: 'materials@electrocorp.co.in',
+    password: 'Client@123',
     authorizedEmails: [
       'materials@electrocorp.co.in',
       'purchase.head@electrocorp.co.in',

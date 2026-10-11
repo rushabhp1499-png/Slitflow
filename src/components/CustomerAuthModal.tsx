@@ -87,8 +87,13 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
     setErrorMessage('');
     setSuccessMessage('');
 
-    if (!companyName.trim() || !regEmail.trim() || !contactPerson.trim()) {
-      setErrorMessage('Please provide Company Name, Contact Person, and Email ID.');
+    if (!companyName.trim()) {
+      setErrorMessage('Company Name is strictly compulsory. Please enter your registered company name.');
+      return;
+    }
+
+    if (!regEmail.trim() || !contactPerson.trim()) {
+      setErrorMessage('Please provide Contact Person and Authorized Email ID.');
       return;
     }
 
@@ -302,36 +307,9 @@ export const CustomerAuthModal: React.FC<CustomerAuthModalProps> = ({
                 </p>
               </div>
 
-              {/* Authorized Test Logins */}
-              <div className="pt-3 border-t border-slate-100">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1.5">
-                  Authorized Test Accounts:
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      loginCustomerByEmail('supplychain@packwellflex.com');
-                      onClose();
-                    }}
-                    className="text-left p-2 rounded-lg bg-slate-50 hover:bg-blue-50 border border-slate-200 transition"
-                  >
-                    <span className="font-bold text-slate-900 block truncate">PackWell Flexible Packaging</span>
-                    <span className="font-mono text-[10px] text-slate-500 truncate block">supplychain@packwellflex.com</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      loginCustomerByEmail('procurement@autotechstamping.com');
-                      onClose();
-                    }}
-                    className="text-left p-2 rounded-lg bg-slate-50 hover:bg-blue-50 border border-slate-200 transition"
-                  >
-                    <span className="font-bold text-slate-900 block truncate">AutoTech Precision</span>
-                    <span className="font-mono text-[10px] text-slate-500 truncate block">procurement@autotechstamping.com</span>
-                  </button>
-                </div>
+              {/* Registered Account Notice */}
+              <div className="pt-2 text-[11px] text-slate-500 text-center">
+                Enter your authorized email registered with Progressive Enterprises.
               </div>
             </div>
           )}

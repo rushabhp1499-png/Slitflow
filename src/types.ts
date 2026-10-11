@@ -12,7 +12,9 @@ export interface Customer {
   id: string;
   name: string;
   companyName: string;
+  contactPerson?: string;
   email: string;
+  password?: string; // Client portal password
   authorizedEmails: string[]; // Multiple email IDs granted login & notification access
   phone: string;
   gstNumber: string;

@@ -61,7 +61,10 @@ interface ProductionContextType {
   selectedCustomerId: string;
   setSelectedCustomerId: (id: string) => void;
   
-  // Factory Staff Management & Floor Authentication (3-4 Factory Staff)
+  // Factory Management & Superadmin Authentication (progressive.ent8@gmail.com / Progressive@123)
+  isFactoryAuthenticated: boolean;
+  loginFactory: (email: string, password: string) => { success: boolean; message: string };
+  logoutFactory: () => void;
   factoryUsers: FactoryUser[];
   activeFactoryUser: FactoryUser | null;
   loginFactoryUser: (userIdOrPinOrEmail: string) => { success: boolean; user?: FactoryUser; message: string };
@@ -72,9 +75,17 @@ interface ProductionContextType {
 
   // Customer Session & Portal Authentication
   authenticatedEmail: string | null;
-  loginCustomerByEmail: (email: string) => { success: boolean; customer?: Customer; message: string };
+  currentCustomer: Customer | null;
+  loginCustomerByEmail: (email: string, password?: string) => { success: boolean; customer?: Customer; message: string };
+  loginCustomerWithGoogle: (googleEmail: string, googleName?: string, companyName?: string, password?: string) => {
+    success: boolean;
+    message: string;
+    requiresCompany?: boolean;
+    customer?: Customer;
+  };
   loginCustomerByAccessCode: (code: string) => { success: boolean; customer?: Customer; message: string };
   logoutCustomer: () => void;
+  logoutAll: () => void;
   
   // Customer Management
   addCustomer: (customerData: Omit<Customer, 'id'>) => Customer;
@@ -195,6 +206,7 @@ interface ProductionContextType {
   getJobById: (id: string) => MaterialInward | undefined;
 }
 
+const STORAGE_KEY_FACTORY_AUTH = 'progressive_enterprises_factory_auth_v5';
 const STORAGE_KEY_JOBS = 'progressive_enterprises_jobs_v4';
 const STORAGE_KEY_CUSTOMERS = 'progressive_enterprises_customers_v4';
 const STORAGE_KEY_NOTIFS = 'progressive_enterprises_notifs_v4';
@@ -206,9 +218,20 @@ const STORAGE_KEY_ACTIVE_FACTORY_USER = 'progressive_enterprises_active_factory_
 const STORAGE_KEY_DRIVE_URL = 'progressive_enterprises_drive_url_v4';
 const DEFAULT_DRIVE_URL = 'https://drive.google.com/drive/my-drive';
 
+// Factory Superadmin Credentials
+export const FACTORY_SUPERADMIN_EMAIL = 'progressive.ent8@gmail.com';
+export const FACTORY_SUPERADMIN_PASSWORD = 'Progressive@123';
+
 const ProductionContext = createContext<ProductionContextType | undefined>(undefined);
 
 export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [isFactoryAuthenticated, setIsFactoryAuthenticated] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_FACTORY_AUTH) === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [jobs, setJobs] = useState<MaterialInward[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_JOBS);
@@ -379,6 +402,24 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const activeFactoryUser = factoryUsers.find(u => u.id === activeFactoryUserId) || null;
 
+  // Active customer resolved by authenticated email or selected ID
+  const currentCustomer = React.useMemo<Customer | null>(() => {
+    if (authenticatedEmail) {
+      const cleanEmail = authenticatedEmail.trim().toLowerCase();
+      const byEmail = customers.find(
+        (c) =>
+          c.authorizedEmails.some((ae) => ae.toLowerCase() === cleanEmail) ||
+          c.email.toLowerCase() === cleanEmail
+      );
+      if (byEmail) return byEmail;
+    }
+    if (selectedCustomerId) {
+      const byId = customers.find((c) => c.id === selectedCustomerId);
+      if (byId) return byId;
+    }
+    return null;
+  }, [customers, authenticatedEmail, selectedCustomerId]);
+
   const loginFactoryUser = (userIdOrPinOrEmail: string) => {
     const input = userIdOrPinOrEmail.trim().toLowerCase();
     const matched = factoryUsers.find(
@@ -455,27 +496,184 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setNotifications(prev => [newNotif, ...prev]);
   };
 
-  // Customer portal authentication by email
-  const loginCustomerByEmail = (email: string) => {
+  // Factory Superadmin Login (progressive.ent8@gmail.com / Progressive@123)
+  const loginFactory = (email: string, pass: string) => {
+    if (
+      email.trim().toLowerCase() === FACTORY_SUPERADMIN_EMAIL.toLowerCase() &&
+      pass === FACTORY_SUPERADMIN_PASSWORD
+    ) {
+      setIsFactoryAuthenticated(true);
+      setActiveRole('factory');
+      setAuthenticatedEmail(null);
+      try {
+        localStorage.setItem(STORAGE_KEY_FACTORY_AUTH, 'true');
+        localStorage.setItem(STORAGE_KEY_ROLE, 'factory');
+        localStorage.removeItem(STORAGE_KEY_AUTH_EMAIL);
+      } catch {
+        // ignore
+      }
+      return {
+        success: true,
+        message: 'Factory access authorized. Welcome to Progressive Enterprises Dashboard.',
+      };
+    }
+    return {
+      success: false,
+      message: 'Access Denied: Invalid factory Login ID or Password. Only authorized factory management can sign in.',
+    };
+  };
+
+  const logoutFactory = () => {
+    setIsFactoryAuthenticated(false);
+    try {
+      localStorage.removeItem(STORAGE_KEY_FACTORY_AUTH);
+    } catch {
+      // ignore
+    }
+  };
+
+  const logoutAll = () => {
+    setIsFactoryAuthenticated(false);
+    setAuthenticatedEmail(null);
+    try {
+      localStorage.removeItem(STORAGE_KEY_FACTORY_AUTH);
+      localStorage.removeItem(STORAGE_KEY_AUTH_EMAIL);
+      localStorage.removeItem(STORAGE_KEY_ROLE);
+    } catch {
+      // ignore
+    }
+  };
+
+  // Customer portal authentication by email and password
+  const loginCustomerByEmail = (email: string, password?: string) => {
     const cleanEmail = email.trim().toLowerCase();
     const matchedCustomer = customers.find(c =>
       c.authorizedEmails.some(ae => ae.toLowerCase() === cleanEmail) ||
       c.email.toLowerCase() === cleanEmail
     );
 
-    if (matchedCustomer) {
-      setAuthenticatedEmail(cleanEmail);
-      setSelectedCustomerId(matchedCustomer.id);
+    if (!matchedCustomer) {
       return {
-        success: true,
-        customer: matchedCustomer,
-        message: `Welcome ${matchedCustomer.name}! Authenticated with ${cleanEmail}.`
+        success: false,
+        message: `Email "${email}" is not registered. Please click "Create New Account" to register your company.`
       };
     }
 
+    if (!password || !password.trim()) {
+      return {
+        success: false,
+        message: 'Password is required to sign in to your customer account.'
+      };
+    }
+
+    // Verify password if set on customer account
+    if (matchedCustomer.password) {
+      if (matchedCustomer.password !== password) {
+        return {
+          success: false,
+          message: 'Incorrect password. Please verify your password and try again.'
+        };
+      }
+    } else {
+      // Legacy customer without a password: bind this password
+      matchedCustomer.password = password;
+      setCustomers(prev => prev.map(c => c.id === matchedCustomer.id ? { ...c, password } : c));
+    }
+
+    setAuthenticatedEmail(cleanEmail);
+    setSelectedCustomerId(matchedCustomer.id);
+    setActiveRole('customer');
+    setIsFactoryAuthenticated(false);
+    try {
+      localStorage.setItem(STORAGE_KEY_AUTH_EMAIL, cleanEmail);
+      localStorage.setItem(STORAGE_KEY_ROLE, 'customer');
+      localStorage.removeItem(STORAGE_KEY_FACTORY_AUTH);
+    } catch {
+      // ignore
+    }
     return {
-      success: false,
-      message: `Email "${email}" is not registered under any customer account. Please contact Progressive Enterprises Admin to grant access.`
+      success: true,
+      customer: matchedCustomer,
+      message: `Welcome back, ${matchedCustomer.companyName || matchedCustomer.name}!`
+    };
+  };
+
+  // Customer Google Sign-In (seamless client access with mandatory company name for new accounts)
+  const loginCustomerWithGoogle = (
+    googleEmail: string,
+    googleName?: string,
+    companyName?: string
+  ) => {
+    const cleanEmail = googleEmail.trim().toLowerCase();
+    const matchedCustomer = customers.find(
+      (c) =>
+        c.authorizedEmails.some((ae) => ae.toLowerCase() === cleanEmail) ||
+        c.email.toLowerCase() === cleanEmail
+    );
+
+    if (matchedCustomer) {
+      setAuthenticatedEmail(cleanEmail);
+      setSelectedCustomerId(matchedCustomer.id);
+      setActiveRole('customer');
+      setIsFactoryAuthenticated(false);
+      try {
+        localStorage.setItem(STORAGE_KEY_AUTH_EMAIL, cleanEmail);
+        localStorage.setItem(STORAGE_KEY_ROLE, 'customer');
+        localStorage.removeItem(STORAGE_KEY_FACTORY_AUTH);
+      } catch {
+        // ignore
+      }
+      return {
+        success: true,
+        customer: matchedCustomer,
+        message: `Welcome back, ${matchedCustomer.companyName || matchedCustomer.name}! Signed in via Google.`,
+      };
+    }
+
+    // New Google Client: Company name is strictly compulsory
+    if (!companyName || !companyName.trim()) {
+      return {
+        success: false,
+        requiresCompany: true,
+        message: 'Entering a Company Name is compulsory to complete your account registration.',
+      };
+    }
+
+    const newId = `CUST-${String(customers.length + 1).padStart(3, '0')}`;
+    const code = `${companyName.trim().substring(0, 3).toUpperCase()}-TRACK-2026`;
+    const newCust: Customer = {
+      id: newId,
+      name: companyName.trim(),
+      companyName: companyName.trim(),
+      email: cleanEmail,
+      authorizedEmails: [cleanEmail],
+      phone: '+91 98000 00000',
+      gstNumber: '',
+      registeredAddress: 'Registered Office',
+      plantAddress: 'Plant Works',
+      city: 'Pune',
+      state: 'Maharashtra',
+      stateCode: '27',
+      accessCode: code,
+    };
+
+    setCustomers((prev) => [...prev, newCust]);
+    setAuthenticatedEmail(cleanEmail);
+    setSelectedCustomerId(newId);
+    setActiveRole('customer');
+    setIsFactoryAuthenticated(false);
+    try {
+      localStorage.setItem(STORAGE_KEY_AUTH_EMAIL, cleanEmail);
+      localStorage.setItem(STORAGE_KEY_ROLE, 'customer');
+      localStorage.removeItem(STORAGE_KEY_FACTORY_AUTH);
+    } catch {
+      // ignore
+    }
+
+    return {
+      success: true,
+      customer: newCust,
+      message: `Account created successfully for ${companyName.trim()} via Google!`,
     };
   };
 
@@ -523,9 +721,27 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const registerCustomer: ProductionContextType['registerCustomer'] = (customerData) => {
+    // Entering a company name is strictly compulsory
+    if (!customerData.companyName || !customerData.companyName.trim()) {
+      return {
+        success: false,
+        message: 'Entering a Company Name is strictly compulsory to create an account.',
+        customer: null as any,
+      };
+    }
+
+    // Creating a password is compulsory
+    if (!customerData.password || customerData.password.trim().length < 6) {
+      return {
+        success: false,
+        message: 'Password is compulsory and must be at least 6 characters long.',
+        customer: null as any,
+      };
+    }
+
     const cleanEmail = customerData.email.trim().toLowerCase();
     const newId = `CUST-${String(customers.length + 1).padStart(3, '0')}`;
-    const code = `${customerData.companyName.substring(0, 3).toUpperCase()}-TRACK-2026`;
+    const code = `${customerData.companyName.trim().substring(0, 3).toUpperCase()}-TRACK-2026`;
 
     // Check if company or email already exists
     const existing = customers.find(
@@ -538,8 +754,20 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (!existing.authorizedEmails.some(e => e.toLowerCase() === cleanEmail)) {
         addAuthorizedEmail(existing.id, cleanEmail);
       }
+      if (customerData.password) {
+        existing.password = customerData.password;
+      }
       setSelectedCustomerId(existing.id);
       setAuthenticatedEmail(cleanEmail);
+      setActiveRole('customer');
+      setIsFactoryAuthenticated(false);
+      try {
+        localStorage.setItem(STORAGE_KEY_AUTH_EMAIL, cleanEmail);
+        localStorage.setItem(STORAGE_KEY_ROLE, 'customer');
+        localStorage.removeItem(STORAGE_KEY_FACTORY_AUTH);
+      } catch {
+        // ignore
+      }
       return {
         success: true,
         customer: existing,
@@ -554,7 +782,10 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const newCust: Customer = {
       ...customerData,
       id: newId,
+      name: customerData.companyName.trim(),
+      companyName: customerData.companyName.trim(),
       email: cleanEmail,
+      password: customerData.password,
       accessCode: code,
       authorizedEmails: authEmails,
       registeredAddress: customerData.registeredAddress || '',
@@ -564,6 +795,15 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setCustomers(prev => [...prev, newCust]);
     setSelectedCustomerId(newId);
     setAuthenticatedEmail(cleanEmail);
+    setActiveRole('customer');
+    setIsFactoryAuthenticated(false);
+    try {
+      localStorage.setItem(STORAGE_KEY_AUTH_EMAIL, cleanEmail);
+      localStorage.setItem(STORAGE_KEY_ROLE, 'customer');
+      localStorage.removeItem(STORAGE_KEY_FACTORY_AUTH);
+    } catch {
+      // ignore
+    }
 
     addNotification(
       'sys-new-cust',
@@ -572,7 +812,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       newCust.companyName,
       'status_change',
       `New Customer Onboarded: ${newCust.companyName}`,
-      `${newCust.companyName} created a new self-service customer portal account. Contact: ${newCust.name} (${cleanEmail}).`
+      `${newCust.companyName} created a new customer account. Contact: ${newCust.contactPerson || newCust.name} (${cleanEmail}).`
     );
 
     return {
@@ -630,12 +870,16 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Add Inward Material
   const addInwardMaterial: ProductionContextType['addInwardMaterial'] = (data) => {
-    const customer = customers.find(c => c.id === data.customerId) || customers[0];
+    const customer =
+      customers.find(c => c.id === data.customerId) ||
+      currentCustomer ||
+      customers[0];
 
     const nextNumber = 85 + jobs.length + 1;
     const jobNo = `PE-JOB-2026-${String(nextNumber).padStart(3, '0')}`;
     const id = 'job-' + Date.now();
     const nowIso = new Date().toISOString();
+    const cleanVehicleNo = (data.vehicleNo && data.vehicleNo.trim()) ? data.vehicleNo.trim().toUpperCase() : '—';
 
     const newJob: MaterialInward = {
       id,
@@ -651,7 +895,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       customerPhone: customer.phone,
       customerRegisteredAddress: customer.registeredAddress || customer.address || 'Registered Office Address',
       inwardChallanNo: data.inwardChallanNo || `INW-${Math.floor(1000 + Math.random() * 9000)}`,
-      vehicleNo: data.vehicleNo.toUpperCase(),
+      vehicleNo: cleanVehicleNo,
       receivedDate: data.receivedDate || new Date().toISOString().split('T')[0],
       materialType: data.materialType,
       grade: data.grade,
@@ -1370,7 +1614,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       prev.map(job => {
         if (job.id !== jobId) return job;
         const targetEmails = recipientEmail
-          ? [recipientEmail]
+          ? recipientEmail.split(',').map(e => e.trim()).filter(Boolean)
           : (job.authorizedEmails && job.authorizedEmails.length > 0 ? job.authorizedEmails : [job.customerEmail]);
 
         const updatedChallans = (job.challans || []).map(ch => {
@@ -1907,6 +2151,9 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setActiveRole,
         selectedCustomerId,
         setSelectedCustomerId,
+        isFactoryAuthenticated,
+        loginFactory,
+        logoutFactory,
         factoryUsers,
         activeFactoryUser,
         loginFactoryUser,
@@ -1915,9 +2162,12 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         updateFactoryUser,
         deleteFactoryUser,
         authenticatedEmail,
+        currentCustomer,
         loginCustomerByEmail,
+        loginCustomerWithGoogle,
         loginCustomerByAccessCode,
         logoutCustomer,
+        logoutAll,
         addCustomer,
         registerCustomer,
         updateCustomer,

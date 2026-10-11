@@ -27,18 +27,55 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
   preselectedCustomerId,
   isCustomerPortal = false,
 }) => {
-  const { customers, addInwardMaterial } = useProduction();
+  const {
+    customers,
+    addInwardMaterial,
+    authenticatedEmail,
+    selectedCustomerId,
+    currentCustomer,
+  } = useProduction();
 
-  const [customerId, setCustomerId] = useState<string>(
-    preselectedCustomerId || (customers[0]?.id ?? 'CUST-001')
-  );
-  const [customerPoNo, setCustomerPoNo] = useState<string>(
-    `PO/PE/${new Date().getFullYear()}/${Math.floor(100 + Math.random() * 900)}`
-  );
+  // Robustly identify the customer who is logged in
+  const loggedInCustomer =
+    (preselectedCustomerId && customers.find((c) => c.id === preselectedCustomerId)) ||
+    (authenticatedEmail &&
+      customers.find(
+        (c) =>
+          c.authorizedEmails.some(
+            (ae) => ae.toLowerCase() === authenticatedEmail.toLowerCase()
+          ) || c.email.toLowerCase() === authenticatedEmail.toLowerCase()
+      )) ||
+    currentCustomer ||
+    (selectedCustomerId && customers.find((c) => c.id === selectedCustomerId)) ||
+    null;
+
+  const initialCustomerId =
+    (isCustomerPortal && loggedInCustomer?.id) ||
+    preselectedCustomerId ||
+    loggedInCustomer?.id ||
+    customers[0]?.id ||
+    'CUST-001';
+
+  const [customerId, setCustomerId] = useState<string>(initialCustomerId);
+
+  // If customer is in customer portal, guarantee customer is strictly locked to loggedInCustomer
+  const effectiveCustomer =
+    (isCustomerPortal && loggedInCustomer)
+      ? loggedInCustomer
+      : (customers.find((c) => c.id === customerId) || loggedInCustomer || customers[0]);
+
+  const effectiveCustomerId = effectiveCustomer?.id || initialCustomerId;
+
+  const [customerPoNo, setCustomerPoNo] = useState<string>(() => {
+    const rawName = effectiveCustomer?.companyName || effectiveCustomer?.name || 'CUST';
+    const cleanPrefix = rawName.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase() || 'PO';
+    return `PO/${cleanPrefix}/${new Date().getFullYear()}/${Math.floor(100 + Math.random() * 900)}`;
+  });
   const [inwardChallanNo, setInwardChallanNo] = useState<string>(
     `INW-${Math.floor(1000 + Math.random() * 9000)}`
   );
-  const [vehicleNo, setVehicleNo] = useState<string>('MH-12-');
+  // Vehicle number is optional
+  const [vehicleNo, setVehicleNo] = useState<string>('');
   const [receivedDate, setReceivedDate] = useState<string>(
     new Date().toISOString().split('T')[0]
   );
@@ -171,10 +208,10 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
     e.preventDefault();
 
     addInwardMaterial({
-      customerId,
+      customerId: effectiveCustomerId,
       customerPoNo,
       inwardChallanNo,
-      vehicleNo,
+      vehicleNo: vehicleNo.trim().toUpperCase() || '—',
       receivedDate,
       materialType,
       grade,
@@ -258,8 +295,8 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
                   Customer {isCustomerPortal ? <span className="text-blue-600 font-bold">(Locked)</span> : <span className="text-red-500">*</span>}
                 </label>
                 {isCustomerPortal ? (
-                  <div className="w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs font-bold text-blue-900 flex items-center justify-between" title="Locked to your authenticated customer account">
-                    <span className="truncate">{customers.find(c => c.id === customerId)?.companyName || 'Your Account'}</span>
+                  <div className="w-full px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs font-bold text-blue-900 flex items-center justify-between" title="Locked to your authenticated company account">
+                    <span className="truncate">{effectiveCustomer?.companyName || effectiveCustomer?.name || 'Your Company Account'}</span>
                     <Lock className="w-3.5 h-3.5 text-blue-600 shrink-0 ml-1" />
                   </div>
                 ) : (
@@ -307,14 +344,13 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Vehicle / Lorry No. <span className="text-red-500">*</span>
+                  Vehicle / Lorry No. <span className="text-slate-400 font-normal">(Optional)</span>
                 </label>
                 <input
                   type="text"
-                  required
                   value={vehicleNo}
                   onChange={(e) => setVehicleNo(e.target.value.toUpperCase())}
-                  placeholder="e.g. MH-12-RN-8842"
+                  placeholder="e.g. MH-12-RN-8842 (Optional)"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold uppercase text-slate-800 focus:bg-white"
                 />
               </div>
