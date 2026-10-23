@@ -88,8 +88,9 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
       state: editForm.state,
     });
 
+    // Show the "saved" confirmation briefly, then close the window.
     setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 2500);
+    setTimeout(onClose, 900);
   };
 
   const handleAddEmail = (e: React.FormEvent) => {
