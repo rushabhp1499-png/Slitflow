@@ -13,7 +13,8 @@ import {
   ChallanRevisionRecord,
   BundleEditRecord,
   SpecChangeRequest,
-  FactoryUser
+  FactoryUser,
+  SlitCut
 } from '../types';
 import {
   INITIAL_JOBS,
@@ -129,6 +130,7 @@ interface ProductionContextType {
     coilsOrRollsCount: number;
     bundleSpecs: BundleSpecifications;
     customerInstructions: string;
+    requestedSlitCuts?: SlitCut[];
     assignedMachine?: string;
     estimatedDeliveryDate?: string;
   }) => MaterialInward | null;
@@ -866,7 +868,8 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const newJob: MaterialInward = {
       id,
       jobNo,
-      customerPoNo: data.customerPoNo || `PO/${customer.name.substring(0, 3).toUpperCase()}/2026/${Math.floor(100 + Math.random() * 900)}`,
+      // Blank PO: the database assigns the next PE-PO number. Duplicates are rejected there too.
+      customerPoNo: (data.customerPoNo || '').trim(),
       customerId: customer.id,
       customerName: customer.companyName,
       customerGst: customer.gstNumber,
@@ -876,7 +879,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         : [customer.email],
       customerPhone: customer.phone,
       customerRegisteredAddress: customer.registeredAddress || customer.address || 'Registered Office Address',
-      inwardChallanNo: data.inwardChallanNo || `INW-${Math.floor(1000 + Math.random() * 9000)}`,
+      inwardChallanNo: (data.inwardChallanNo || '').trim() || '—',
       vehicleNo: cleanVehicleNo,
       receivedDate: data.receivedDate || new Date().toISOString().split('T')[0],
       materialType: data.materialType,
@@ -889,6 +892,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       coilsOrRollsCount: Number(data.coilsOrRollsCount) || 1,
       bundleSpecs: data.bundleSpecs,
       customerInstructions: data.customerInstructions || 'Standard precision slitting and bundle packaging.',
+      requestedSlitCuts: data.requestedSlitCuts,
       status: data.estimatedDeliveryDate ? 'pending_production' : 'received',
       assignedMachine: data.assignedMachine || 'Slitter Line #1',
       estimatedDeliveryDate: data.estimatedDeliveryDate,

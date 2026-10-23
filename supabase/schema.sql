@@ -140,6 +140,8 @@ as $$
 declare
   staff boolean := public.is_staff();
   job_no text;
+  po_no text;
+  fresh boolean := false;
 begin
   new.updated_at := now();
 
@@ -162,8 +164,13 @@ begin
         );
     end if;
 
+    -- One new order per customer at a time, so two simultaneous entries
+    -- can never both claim the same PO number.
+    perform pg_advisory_xact_lock(hashtext('jobs_po:' || new.customer_id));
+
     job_no := new.data ->> 'jobNo';
     if not staff or job_no is null or job_no = '' or job_no like 'PENDING%' then
+      fresh := true;
       loop
         job_no := 'PE-JOB-' || to_char(now() at time zone 'Asia/Kolkata', 'YYYY') || '-'
           || lpad(nextval('public.job_no_seq')::text, 3, '0');
@@ -171,7 +178,29 @@ begin
       end loop;
     end if;
 
-    new.data := new.data || jsonb_build_object('id', new.id, 'customerId', new.customer_id, 'jobNo', job_no);
+    -- PO numbers never repeat for a customer. Left blank, the PO follows the
+    -- job number (PE-JOB-2026-105 -> PE-PO-2026-105). Imported old records
+    -- (fresh = false) keep whatever PO they had.
+    po_no := nullif(trim(coalesce(new.data ->> 'customerPoNo', '')), '');
+    if fresh then
+      if po_no is null then
+        po_no := replace(job_no, 'PE-JOB-', 'PE-PO-');
+        while exists (
+          select 1 from jobs
+          where customer_id = new.customer_id and lower(trim(data ->> 'customerPoNo')) = lower(po_no)
+        ) loop
+          po_no := po_no || '-A';
+        end loop;
+      elsif exists (
+        select 1 from jobs
+        where customer_id = new.customer_id and lower(trim(data ->> 'customerPoNo')) = lower(po_no)
+      ) then
+        raise exception 'PO number % has already been used for this customer. Please use a different PO number.', po_no;
+      end if;
+    end if;
+
+    new.data := new.data || jsonb_build_object('id', new.id, 'customerId', new.customer_id, 'jobNo', job_no)
+      || case when po_no is not null then jsonb_build_object('customerPoNo', po_no) else '{}'::jsonb end;
 
     insert into notifications (id, customer_id, data)
     values (
@@ -184,7 +213,7 @@ begin
         'customerId', new.customer_id,
         'customerName', coalesce(new.data ->> 'customerName', ''),
         'type', 'new_material_inward',
-        'title', 'New Inward (PO: ' || coalesce(new.data ->> 'customerPoNo', '-') || '): ' || coalesce(new.data ->> 'grade', ''),
+        'title', 'New Inward (PO: ' || coalesce(po_no, '-') || '): ' || coalesce(new.data ->> 'grade', ''),
         'message', coalesce(new.data ->> 'customerName', 'Customer') || ' registered ' || coalesce(new.data ->> 'incomingWeight', '0')
           || ' kg via ' || coalesce(new.data ->> 'vehicleNo', '-') || '. Job number ' || job_no || '.',
         'createdAt', now(),

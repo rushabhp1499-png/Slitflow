@@ -460,8 +460,8 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             <thead className="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
               <tr>
                 <th className="py-3 px-4">Job & PO #</th>
-                <th className="py-3 px-4">Customer & Registered Info</th>
-                <th className="py-3 px-4">Raw Material & Packaging Specs</th>
+                <th className="py-3 px-4">Customer</th>
+                <th className="py-3 px-4">Raw Material</th>
                 <th className="py-3 px-4">Live Stage & Dispatches</th>
                 <th className="py-3 px-4">Estimated Delivery (EDD)</th>
                 <th className="py-3 px-4 text-right">Factory Operations</th>
@@ -516,11 +516,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                           </div>
                           
                           <div className="text-[11px] font-mono text-blue-700 font-bold mt-1">
-                            PO #{job.customerPoNo}
-                          </div>
-
-                          <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                            Inward: {job.inwardChallanNo}
+                            PO #{job.customerPoNo || '…'}
                           </div>
 
                           {isPermanentlyClosed ? (
@@ -536,17 +532,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
 
                         {/* Customer */}
                         <td className="py-3.5 px-4 align-top max-w-[220px]">
-                          <div className="font-bold text-slate-900 line-clamp-1">{job.customerName}</div>
-                          <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                            GST: {job.customerGst}
-                          </div>
-                          <div className="text-[10px] text-slate-500 line-clamp-1 mt-0.5" title={customer?.registeredAddress}>
-                            {customer?.registeredAddress || job.customerAddress}
-                          </div>
-                          <div className="text-[10px] text-blue-600 font-medium flex items-center gap-1 mt-1">
-                            <Mail className="w-3 h-3 text-blue-500 shrink-0" />
-                            <span className="truncate">{customer?.authorizedEmails?.length || 1} Email IDs Granted</span>
-                          </div>
+                          <div className="font-bold text-slate-900 line-clamp-2">{job.customerName}</div>
                         </td>
 
                         {/* Incoming Material & Packaging Specs */}
@@ -561,13 +547,6 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                               ({job.coilsOrRollsCount} coil{job.coilsOrRollsCount > 1 ? 's' : ''})
                             </span>
                           </div>
-
-                          {/* Bundle specs */}
-                          {job.bundleSpecs && (
-                            <div className="text-[10px] text-purple-900 font-medium bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 mt-1 inline-block">
-                              ~{job.bundleSpecs.targetBundleWeightKg || 28}kg/bundle • {job.bundleSpecs.unitsPerBundle} {job.bundleSpecs.unitType}
-                            </div>
-                          )}
                         </td>
 
                         {/* Production Status & Dispatches */}

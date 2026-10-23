@@ -1,19 +1,17 @@
 import React, { useState } from 'react';
 import { useProduction } from '../context/ProductionContext';
-import { MaterialInward } from '../types';
+import { MaterialInward, SlitCut } from '../types';
 import {
   PackagePlus,
   X,
   Building2,
-  Calendar,
   Layers,
-  Scale,
-  Maximize2,
-  FileText,
+  Scissors,
   AlertCircle,
   PackageCheck,
-  Hash,
-  Lock
+  Lock,
+  Plus,
+  Trash2
 } from 'lucide-react';
 
 interface InwardEntryModalProps {
@@ -22,6 +20,18 @@ interface InwardEntryModalProps {
   isCustomerPortal?: boolean;
 }
 
+interface SlitRow {
+  id: string;
+  widthMm: string;
+  numberOfCuts: string;
+}
+
+const newSlitRow = (): SlitRow => ({
+  id: 'cut-' + Math.random().toString(36).substring(2, 8),
+  widthMm: '',
+  numberOfCuts: '1',
+});
+
 export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
   onClose,
   preselectedCustomerId,
@@ -29,6 +39,7 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
 }) => {
   const {
     customers,
+    jobs,
     addInwardMaterial,
     authenticatedEmail,
     selectedCustomerId,
@@ -54,7 +65,7 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
     preselectedCustomerId ||
     loggedInCustomer?.id ||
     customers[0]?.id ||
-    'CUST-001';
+    '';
 
   const [customerId, setCustomerId] = useState<string>(initialCustomerId);
 
@@ -66,175 +77,114 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
 
   const effectiveCustomerId = effectiveCustomer?.id || initialCustomerId;
 
-  const [customerPoNo, setCustomerPoNo] = useState<string>(() => {
-    const rawName = effectiveCustomer?.companyName || effectiveCustomer?.name || 'CUST';
-    const cleanPrefix = rawName.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase() || 'PO';
-    return `PO/${cleanPrefix}/${new Date().getFullYear()}/${Math.floor(100 + Math.random() * 900)}`;
-  });
-  const [inwardChallanNo, setInwardChallanNo] = useState<string>(
-    `INW-${Math.floor(1000 + Math.random() * 9000)}`
-  );
-  // Vehicle number is optional
+  // Left blank, the database assigns the next number in the PE-PO series.
+  const [customerPoNo, setCustomerPoNo] = useState<string>('');
+  const [inwardChallanNo, setInwardChallanNo] = useState<string>('');
   const [vehicleNo, setVehicleNo] = useState<string>('');
-  const [receivedDate, setReceivedDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
-  );
-  const [materialType, setMaterialType] = useState<MaterialInward['materialType']>(
-    'Plastic / Polymer Film'
-  );
-  const [grade, setGrade] = useState<string>('BOPET 12 Micron Polyester Film (Corona Treated)');
-  const [thickness, setThickness] = useState<number>(12);
+  const receivedDate = new Date().toISOString().split('T')[0];
+
+  const [grade, setGrade] = useState<string>('');
+  const [thickness, setThickness] = useState<string>('');
   const [thicknessUnit, setThicknessUnit] = useState<MaterialInward['thicknessUnit']>('microns');
-  const [incomingWidth, setIncomingWidth] = useState<number>(1000);
-  const [incomingLength, setIncomingLength] = useState<number>(75000);
-  const [incomingWeight, setIncomingWeight] = useState<number>(1252);
-  const [coilsOrRollsCount, setCoilsOrRollsCount] = useState<number>(2);
-  
+  const [incomingWidth, setIncomingWidth] = useState<string>('');
+  const [incomingLength, setIncomingLength] = useState<string>('');
+  const [incomingWeight, setIncomingWeight] = useState<string>('');
+  const [coilsOrRollsCount, setCoilsOrRollsCount] = useState<string>('1');
+
+  // Slitting sizes requested by the customer
+  const [slitRows, setSlitRows] = useState<SlitRow[]>([newSlitRow()]);
+  const [extraInstructions, setExtraInstructions] = useState<string>('');
+
   // Packaging & Bundle Specs
-  const [targetBundleWeightKg, setTargetBundleWeightKg] = useState<number>(28);
-  const [unitsPerBundle, setUnitsPerBundle] = useState<number>(10);
-  const [unitType, setUnitType] = useState<'reels' | 'reams' | 'packets' | 'strips'>('reels');
-  const [bundleMaxNotes, setBundleMaxNotes] = useState<string>(
-    'Bundles max approx 25 to 30 kg max. Each bundle with 10 reels or 20 reams of 20mm each.'
-  );
+  const [targetBundleWeightKg, setTargetBundleWeightKg] = useState<string>('28');
+  const [unitsPerBundle, setUnitsPerBundle] = useState<string>('10');
+  const [unitType, setUnitType] = useState<'reels' | 'reams'>('reels');
+  const [bundleMaxNotes, setBundleMaxNotes] = useState<string>('');
 
-  const [customerInstructions, setCustomerInstructions] = useState<string>(
-    'Slit into 20mm width reels. Max bundle weight approx 25 to 30 kg. Pack with 10 reels or 20 reams of 20mm each per bundle. Core size 76mm, edge trim rewound separately.'
-  );
-  const [assignedMachine, setAssignedMachine] = useState<string>(
-    'Paper & Film Slitter Rewinder #3 (2000mm)'
-  );
+  const [formError, setFormError] = useState<string>('');
 
-  // Quick preset for EDD
-  const getFutureDate = (days: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() + days);
-    return d.toISOString().split('T')[0];
+  const updateSlitRow = (id: string, field: 'widthMm' | 'numberOfCuts', value: string) => {
+    setSlitRows((rows) => rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   };
 
-  const [estimatedDeliveryDate, setEstimatedDeliveryDate] = useState<string>(getFutureDate(3));
-  const [assignEddNow, setAssignEddNow] = useState<boolean>(true);
+  const validCuts: SlitCut[] = slitRows
+    .filter((r) => Number(r.widthMm) > 0 && Number(r.numberOfCuts) > 0)
+    .map((r) => ({ id: r.id, widthMm: Number(r.widthMm), numberOfCuts: Math.round(Number(r.numberOfCuts)) }));
 
-  // Preset material templates for fast entry
-  const sampleMaterialTemplates = [
-    {
-      name: '⭐ 12 Micron Polyester Film (1000mm / 1252kg)',
-      type: 'Plastic / Polymer Film' as const,
-      grade: 'BOPET 12 Micron Polyester Film (Corona Treated)',
-      thk: 12,
-      unit: 'microns' as const,
-      width: 1000,
-      wt: 1252,
-      len: 75000,
-      rolls: 2,
-      bundleMax: 30,
-      unitsPer: 10,
-      uType: 'reels' as const,
-      bNotes: 'All bundles approx 25-30 kg max. Each bundle has 10 reels or 20 reams of 20mm each.',
-      inst: 'Slit to 20mm reels. Max bundle weight 25-30 kg. Each bundle with 10 reels or 20 reams of 20mm. Core 76mm.',
-      machine: 'Paper & Film Slitter Rewinder #3 (2000mm)',
-    },
-    {
-      name: 'SS 304 Coil (0.8mm x 1250mm / 4500kg)',
-      type: 'Steel Coil / Sheet' as const,
-      grade: 'Stainless Steel 304 (Cold Rolled 2B)',
-      thk: 0.8,
-      unit: 'mm' as const,
-      width: 1250,
-      wt: 4500,
-      len: 1500,
-      rolls: 2,
-      bundleMax: 50,
-      unitsPer: 5,
-      uType: 'reels' as const,
-      bNotes: 'Corrugated packing with VCI rust inhibitor paper.',
-      inst: 'Slit into 45mm and 60mm reels. Pack into corrugated boxes with VCI paper.',
-      machine: 'Precision Slitter #1 (1300mm)',
-    },
-    {
-      name: 'ETP Copper Strip (1.2mm x 600mm / 3200kg)',
-      type: 'Copper / Brass Strip' as const,
-      grade: 'Electrolytic Tough Pitch (ETP) Copper Strip',
-      thk: 1.2,
-      unit: 'mm' as const,
-      width: 600,
-      wt: 3200,
-      len: 2200,
-      rolls: 3,
-      bundleMax: 35,
-      unitsPer: 6,
-      uType: 'reels' as const,
-      bNotes: 'Heavy wooden pallet packing with eye-to-sky strapping.',
-      inst: 'Slit into 32mm wide electrical winding strips. Zero burr, wrapped with core rings.',
-      machine: 'Precision Slitter #2 (Heavy Gauge)',
-    },
-    {
-      name: 'Kraft Liner Paper (180 GSM x 1800mm / 5200kg)',
-      type: 'Kraft Paper Reel' as const,
-      grade: 'Virgin Kraft Linerboard 180 GSM',
-      thk: 180,
-      unit: 'microns' as const,
-      width: 1800,
-      wt: 5200,
-      len: 16000,
-      rolls: 4,
-      bundleMax: 40,
-      unitsPer: 8,
-      uType: 'reels' as const,
-      bNotes: 'Moisture barrier film stretch wrapping.',
-      inst: 'Slit into 300mm x 4 reels and 250mm x 2 reels. Moisture protected packaging.',
-      machine: 'Paper & Film Slitter Rewinder #3 (2000mm)',
-    },
-  ];
+  const widthNum = Number(incomingWidth) || 0;
+  const usedWidth = validCuts.reduce((sum, c) => sum + c.widthMm * c.numberOfCuts, 0);
+  const trimWidth = widthNum - usedWidth;
 
-  const applyTemplate = (tpl: (typeof sampleMaterialTemplates)[0]) => {
-    setMaterialType(tpl.type);
-    setGrade(tpl.grade);
-    setThickness(tpl.thk);
-    setThicknessUnit(tpl.unit);
-    setIncomingWidth(tpl.width);
-    setIncomingWeight(tpl.wt);
-    setIncomingLength(tpl.len);
-    setCoilsOrRollsCount(tpl.rolls);
-    setTargetBundleWeightKg(tpl.bundleMax);
-    setUnitsPerBundle(tpl.unitsPer);
-    setUnitType(tpl.uType);
-    setBundleMaxNotes(tpl.bNotes);
-    setCustomerInstructions(tpl.inst);
-    setAssignedMachine(tpl.machine);
-  };
+  const slitSummary = validCuts.map((c) => `${c.numberOfCuts} × ${c.widthMm} mm`).join(', ');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError('');
 
-    addInwardMaterial({
+    if (!effectiveCustomer) {
+      setFormError('Add the customer first (Manage Customers), then record the inward material.');
+      return;
+    }
+
+    const po = customerPoNo.trim();
+    if (po) {
+      const alreadyUsed = jobs.some(
+        (j) =>
+          j.customerId === effectiveCustomerId &&
+          (j.customerPoNo || '').trim().toLowerCase() === po.toLowerCase()
+      );
+      if (alreadyUsed) {
+        setFormError(`PO number "${po}" has already been used for this customer. Please enter a different PO number, or leave it blank to get the next one automatically.`);
+        return;
+      }
+    }
+
+    if (validCuts.length === 0) {
+      setFormError('Add at least one slitting size (width in mm and number of strips).');
+      return;
+    }
+    if (widthNum > 0 && usedWidth > widthNum) {
+      setFormError(`The slitting sizes add up to ${usedWidth} mm, which is more than the incoming width of ${widthNum} mm.`);
+      return;
+    }
+
+    const instructions = [
+      `Slit sizes: ${slitSummary}.`,
+      widthNum > 0 ? `Edge trim: ${Math.max(0, trimWidth)} mm.` : '',
+      extraInstructions.trim(),
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    const created = addInwardMaterial({
       customerId: effectiveCustomerId,
-      customerPoNo,
-      inwardChallanNo,
+      customerPoNo: po,
+      inwardChallanNo: inwardChallanNo.trim(),
       vehicleNo: vehicleNo.trim().toUpperCase() || '—',
       receivedDate,
-      materialType,
-      grade,
+      materialType: 'Other',
+      grade: grade.trim(),
       thickness: Number(thickness),
       thicknessUnit,
-      incomingWidth: Number(incomingWidth),
-      incomingLength: Number(incomingLength),
+      incomingWidth: widthNum,
+      incomingLength: Number(incomingLength) || 0,
       incomingWeight: Number(incomingWeight),
-      coilsOrRollsCount: Number(coilsOrRollsCount),
-      customerInstructions,
-      assignedMachine,
-      estimatedDeliveryDate: isCustomerPortal ? undefined : (assignEddNow ? estimatedDeliveryDate || getFutureDate(3) : undefined),
+      coilsOrRollsCount: Number(coilsOrRollsCount) || 1,
+      requestedSlitCuts: validCuts,
+      customerInstructions: instructions,
       bundleSpecs: {
-        targetBundleWeightKg: Number(targetBundleWeightKg),
-        unitsPerBundle: Number(unitsPerBundle),
+        targetBundleWeightKg: Number(targetBundleWeightKg) || 28,
+        unitsPerBundle: Number(unitsPerBundle) || 10,
         unitType,
-        packagingFormat: 'Corrugated Boxes & Shrink Bundles',
-        specialPackingNotes: bundleMaxNotes,
+        packagingStyle: bundleMaxNotes.trim(),
       },
     });
 
-    onClose();
+    if (created) onClose();
   };
+
+  const inputClass =
+    'w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto no-print">
@@ -262,29 +212,9 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
 
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6">
-          
-          {/* Quick Template Picker */}
-          <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 flex items-center justify-between">
-              <span>Quick Material Grade & Slitting Presets</span>
-              <span className="text-[10px] text-blue-600">Click to autofill exact job specs</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {sampleMaterialTemplates.map((t, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => applyTemplate(t)}
-                  className="px-2.5 py-1 text-[11px] font-medium bg-slate-100 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 text-slate-700 border border-slate-200 rounded-md transition text-left"
-                >
-                  {t.name}
-                </button>
-              ))}
-            </div>
-          </div>
 
           {/* Section 1: Customer & Inward Transport Details */}
-          <div className="border-t border-slate-200 pt-4">
+          <div>
             <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <Building2 className="w-4 h-4 text-blue-600" />
               1. Customer, PO & Delivery Gate Info
@@ -316,28 +246,27 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Customer PO # <span className="text-red-500">*</span>
+                  Customer PO # <span className="text-slate-400 font-normal">(Optional)</span>
                 </label>
                 <input
                   type="text"
-                  required
                   value={customerPoNo}
                   onChange={(e) => setCustomerPoNo(e.target.value)}
-                  placeholder="e.g. PO/PW/2026/092"
+                  placeholder="Your PO number"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono font-bold text-blue-900 focus:bg-white"
                 />
+                <p className="text-[10px] text-slate-500 mt-1">Leave blank to get the next number automatically.</p>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Inward Challan # <span className="text-red-500">*</span>
+                  Inward Challan # <span className="text-slate-400 font-normal">(Optional)</span>
                 </label>
                 <input
                   type="text"
-                  required
                   value={inwardChallanNo}
                   onChange={(e) => setInwardChallanNo(e.target.value)}
-                  placeholder="e.g. AT/INW/9904"
+                  placeholder="Your delivery challan no."
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono text-slate-800 focus:bg-white"
                 />
               </div>
@@ -350,7 +279,7 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
                   type="text"
                   value={vehicleNo}
                   onChange={(e) => setVehicleNo(e.target.value.toUpperCase())}
-                  placeholder="e.g. MH-12-RN-8842 (Optional)"
+                  placeholder="e.g. MH-04-AB-1234"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold uppercase text-slate-800 focus:bg-white"
                 />
               </div>
@@ -364,59 +293,38 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
               2. Incoming Material Parameters (As received from customer)
             </h4>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Material Category <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={materialType}
-                  onChange={(e) => setMaterialType(e.target.value as any)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white"
-                >
-                  <option value="Plastic / Polymer Film">Plastic / Polymer Film (BOPET, BOPP, PVC)</option>
-                  <option value="Steel Coil / Sheet">Steel Coil / Sheet</option>
-                  <option value="Aluminum Coil">Aluminum Coil</option>
-                  <option value="Copper / Brass Strip">Copper / Brass Strip</option>
-                  <option value="Kraft Paper Reel">Kraft Paper Reel</option>
-                  <option value="Other">Other Industrial Material</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Grade of Material <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={grade}
-                  onChange={(e) => setGrade(e.target.value)}
-                  placeholder="e.g. 12 Micron Polyester Film, SS 304, CRCA D..."
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:bg-white"
-                />
-              </div>
+            <div className="mb-3">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Grade of Material <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={grade}
+                onChange={(e) => setGrade(e.target.value)}
+                placeholder="e.g. 12 Micron Polyester Film"
+                className={`${inputClass} font-bold`}
+              />
             </div>
 
-            {/* Dimensional & Weight Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Thickness & Unit <span className="text-red-500">*</span>
+                  Thickness <span className="text-red-500">*</span>
                 </label>
                 <div className="flex">
                   <input
                     type="number"
-                    step={0.01}
+                    step="any"
                     required
-                    min={0.01}
+                    min={0.001}
                     value={thickness}
-                    onChange={(e) => setThickness(parseFloat(e.target.value) || 0)}
-                    className="w-full px-2.5 py-2 bg-slate-50 border border-r-0 border-slate-300 rounded-l-lg text-xs font-bold text-slate-800"
+                    onChange={(e) => setThickness(e.target.value)}
+                    className="w-full min-w-0 px-2.5 py-2 bg-slate-50 border border-r-0 border-slate-300 rounded-l-lg text-xs font-bold text-slate-800"
                   />
                   <select
                     value={thicknessUnit}
-                    onChange={(e) => setThicknessUnit(e.target.value as any)}
+                    onChange={(e) => setThicknessUnit(e.target.value as MaterialInward['thicknessUnit'])}
                     className="bg-slate-200 border border-slate-300 rounded-r-lg px-2 text-xs font-semibold text-slate-700"
                   >
                     <option value="microns">μm</option>
@@ -428,98 +336,169 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Incoming Width (mm) <span className="text-red-500">*</span>
+                  Width (mm) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
+                  step="any"
                   required
                   min={1}
                   value={incomingWidth}
-                  onChange={(e) => setIncomingWidth(parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:bg-white"
+                  onChange={(e) => setIncomingWidth(e.target.value)}
+                  className={`${inputClass} font-bold`}
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Length (Meters)
+                  Weight (kg) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
-                  min={1}
-                  value={incomingLength}
-                  onChange={(e) => setIncomingLength(parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:bg-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Weight (Kg) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
+                  step="any"
                   required
-                  min={1}
-                  step={0.5}
+                  min={0.1}
                   value={incomingWeight}
-                  onChange={(e) => setIncomingWeight(parseFloat(e.target.value) || 0)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-blue-900 focus:bg-white"
+                  onChange={(e) => setIncomingWeight(e.target.value)}
+                  className={`${inputClass} font-bold text-blue-900`}
                 />
               </div>
-            </div>
 
-            <div className={`grid gap-3 mt-3 ${isCustomerPortal ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Incoming Coils / Jumbo Rolls Count
+                  Length (m)
+                </label>
+                <input
+                  type="number"
+                  step="any"
+                  min={0}
+                  value={incomingLength}
+                  onChange={(e) => setIncomingLength(e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  No. of Rolls / Coils
                 </label>
                 <input
                   type="number"
                   min={1}
                   value={coilsOrRollsCount}
-                  onChange={(e) => setCoilsOrRollsCount(parseInt(e.target.value) || 1)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:bg-white"
+                  onChange={(e) => setCoilsOrRollsCount(e.target.value)}
+                  className={inputClass}
                 />
               </div>
-              {!isCustomerPortal && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Assigned Machine Line
-                  </label>
-                  <select
-                    value={assignedMachine}
-                    onChange={(e) => setAssignedMachine(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white"
-                  >
-                    <option value="Paper & Film Slitter Rewinder #3 (2000mm)">Slitter Rewinder #3 (Film & Paper 2000mm)</option>
-                    <option value="Precision Slitter #1 (1300mm)">Slitter Line #1 (1300mm Precision)</option>
-                    <option value="Precision Slitter #2 (Heavy Gauge)">Slitter Line #2 (Heavy Gauge Coil)</option>
-                    <option value="Micro Shearing Line #4">Shearing & Micro Strip Line #4</option>
-                  </select>
-                </div>
-              )}
             </div>
           </div>
 
-          {/* Section 3: Packaging & Bundle Specifications (Approx 25-30kg max, 10 reels / 20 reams) */}
+          {/* Section 3: Slitting Sizes */}
+          <div className="border-t border-slate-200 pt-4">
+            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+              <Scissors className="w-4 h-4 text-blue-600" />
+              3. Slitting Sizes Required
+            </h4>
+            <p className="text-[11px] text-slate-500 mb-3">
+              Add each width you need and how many strips of that width to cut across the roll.
+            </p>
+
+            <div className="space-y-2">
+              <div className="grid grid-cols-[1fr_1fr_auto] gap-2 text-[11px] font-semibold text-slate-600 px-0.5">
+                <span>Slit width (mm)</span>
+                <span>No. of strips</span>
+                <span className="w-8" />
+              </div>
+              {slitRows.map((row) => (
+                <div key={row.id} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                  <input
+                    type="number"
+                    step="any"
+                    min={0.1}
+                    value={row.widthMm}
+                    onChange={(e) => updateSlitRow(row.id, 'widthMm', e.target.value)}
+                    placeholder="e.g. 20"
+                    className={`${inputClass} font-bold`}
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={row.numberOfCuts}
+                    onChange={(e) => updateSlitRow(row.id, 'numberOfCuts', e.target.value)}
+                    className={`${inputClass} font-bold`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setSlitRows((rows) => (rows.length > 1 ? rows.filter((r) => r.id !== row.id) : rows))}
+                    disabled={slitRows.length === 1}
+                    className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-600 disabled:opacity-30 disabled:hover:text-slate-400"
+                    title="Remove this size"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setSlitRows((rows) => [...rows, newSlitRow()])}
+                className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:text-blue-900"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add another size
+              </button>
+            </div>
+
+            {validCuts.length > 0 && (
+              <div
+                className={`mt-3 rounded-lg border px-3 py-2 text-xs ${
+                  widthNum > 0 && usedWidth > widthNum
+                    ? 'bg-red-50 border-red-200 text-red-900'
+                    : 'bg-blue-50 border-blue-200 text-blue-950'
+                }`}
+              >
+                <span className="font-bold">{slitSummary}</span>
+                {widthNum > 0 && (
+                  <span>
+                    {' '}= {usedWidth} mm of {widthNum} mm
+                    {usedWidth <= widthNum ? ` • edge trim ${trimWidth} mm` : ' • exceeds the roll width'}
+                  </span>
+                )}
+              </div>
+            )}
+
+            <div className="mt-3">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Other instructions <span className="text-slate-400 font-normal">(Optional)</span>
+              </label>
+              <textarea
+                rows={2}
+                value={extraInstructions}
+                onChange={(e) => setExtraInstructions(e.target.value)}
+                placeholder="e.g. Core size 76 mm, tolerance ±0.5 mm, rewind edge trim separately"
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          {/* Section 4: Packaging & Bundle Specifications */}
           <div className="border-t border-slate-200 pt-4 bg-purple-50/40 p-4 rounded-xl border border-purple-200">
             <h4 className="text-xs font-bold text-purple-950 uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <PackageCheck className="w-4 h-4 text-purple-700" />
-              3. Bundle & Packaging Specifications Required by Customer
+              4. Bundle & Packaging Specifications
             </h4>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Max Bundle Weight (approx 25 to 30 kg max)
+                  Max Bundle Weight
                 </label>
                 <div className="relative">
                   <input
                     type="number"
-                    min={5}
-                    max={200}
+                    min={1}
+                    max={500}
+                    step="any"
                     value={targetBundleWeightKg}
-                    onChange={(e) => setTargetBundleWeightKg(parseFloat(e.target.value) || 28)}
+                    onChange={(e) => setTargetBundleWeightKg(e.target.value)}
                     className="w-full px-3 py-2 bg-white border border-purple-300 rounded-lg text-xs font-bold text-purple-950"
                   />
                   <span className="absolute right-3 top-2 text-xs text-purple-700 font-semibold">kg max</span>
@@ -528,158 +507,50 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Units per Bundle (e.g. 10 or 20)
+                  Units per Bundle
                 </label>
                 <input
                   type="number"
                   min={1}
                   value={unitsPerBundle}
-                  onChange={(e) => setUnitsPerBundle(parseInt(e.target.value) || 10)}
+                  onChange={(e) => setUnitsPerBundle(e.target.value)}
                   className="w-full px-3 py-2 bg-white border border-purple-300 rounded-lg text-xs font-bold text-purple-950"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Unit Packaging Type
+                  Unit Type
                 </label>
                 <select
                   value={unitType}
-                  onChange={(e) => setUnitType(e.target.value as any)}
+                  onChange={(e) => setUnitType(e.target.value as 'reels' | 'reams')}
                   className="w-full px-3 py-2 bg-white border border-purple-300 rounded-lg text-xs font-semibold text-slate-800"
                 >
                   <option value="reels">Reels</option>
                   <option value="reams">Reams</option>
-                  <option value="packets">Packets</option>
-                  <option value="strips">Strips</option>
                 </select>
               </div>
             </div>
 
             <div>
               <label className="block text-[11px] font-semibold text-purple-900 mb-1">
-                Bundle Configuration Note:
+                Bundle Configuration Note <span className="text-slate-400 font-normal">(Optional)</span>
               </label>
               <input
                 type="text"
                 value={bundleMaxNotes}
                 onChange={(e) => setBundleMaxNotes(e.target.value)}
-                placeholder="e.g. Each bundle will have either 10 reels or 20 reams of 20 mm each"
+                placeholder="e.g. Each bundle with 10 reels of 20 mm"
                 className="w-full px-3 py-1.5 bg-white border border-purple-300 rounded-lg text-xs text-slate-800"
               />
             </div>
           </div>
 
-          {/* Section 4: Customer Instructions */}
-          <div className="border-t border-slate-200 pt-4">
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
-                <FileText className="w-4 h-4 text-blue-600" />
-                4. Customer Slitting Instructions & Tolerance Notes
-              </label>
-              <span className="text-[11px] text-slate-500">Output requirements</span>
-            </div>
-            <textarea
-              rows={3}
-              required
-              value={customerInstructions}
-              onChange={(e) => setCustomerInstructions(e.target.value)}
-              placeholder="e.g. Slit into 20mm width reels. Max bundle weight 25 to 30 kg max. Each bundle with 10 reels or 20 reams of 20mm each..."
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white"
-            />
-          </div>
-
-          {/* Section 5: Estimated Delivery Date (EDD) */}
-          {isCustomerPortal ? (
-            <div className="border-t border-slate-200 pt-4 bg-amber-50/70 p-4 rounded-xl border border-amber-200/80">
-              <div className="flex items-start gap-3">
-                <div className="p-2 bg-amber-100 text-amber-800 rounded-lg shrink-0 mt-0.5">
-                  <Calendar className="w-4 h-4 text-amber-700" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-xs font-bold text-amber-950 uppercase tracking-wider">
-                      5. Estimated Delivery Date (EDD) — Set Exclusively by Factory
-                    </h4>
-                    <span className="text-[10px] bg-amber-200/80 text-amber-900 font-semibold px-2 py-0.5 rounded border border-amber-300">
-                      Factory Policy
-                    </span>
-                  </div>
-                  <p className="text-xs text-amber-900/90 mt-1 leading-relaxed">
-                    Customer cannot set the Estimated Delivery Date (EDD) for themselves. Once your material is physically received and weighed at the Progressive Enterprises works, our factory production head will review blade setup schedule and assign your official EDD.
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="border-t border-slate-200 pt-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-blue-600" />
-                  <span className="text-xs font-bold text-blue-950 uppercase tracking-wider">
-                    5. Estimated Delivery Date (EDD)
-                  </span>
-                </div>
-                <label className="flex items-center gap-1.5 cursor-pointer text-xs font-medium text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={assignEddNow}
-                    onChange={(e) => setAssignEddNow(e.target.checked)}
-                    className="rounded text-blue-600"
-                  />
-                  Assign EDD Right Now
-                </label>
-              </div>
-
-              {assignEddNow ? (
-                <div className="space-y-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-600">Quick turnaround:</span>
-                    <button
-                      type="button"
-                      onClick={() => setEstimatedDeliveryDate(getFutureDate(2))}
-                      className="px-2.5 py-1 text-xs bg-white hover:bg-blue-100 border border-blue-200 rounded font-semibold text-blue-800 transition"
-                    >
-                      +2 Days (Urgent)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEstimatedDeliveryDate(getFutureDate(3))}
-                      className="px-2.5 py-1 text-xs bg-white hover:bg-blue-100 border border-blue-200 rounded font-semibold text-blue-800 transition"
-                    >
-                      +3 Days (Standard)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEstimatedDeliveryDate(getFutureDate(7))}
-                      className="px-2.5 py-1 text-xs bg-white hover:bg-blue-100 border border-blue-200 rounded font-semibold text-blue-800 transition"
-                    >
-                      +7 Days (Heavy Lot)
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <input
-                        type="date"
-                        value={estimatedDeliveryDate}
-                        onChange={(e) => setEstimatedDeliveryDate(e.target.value)}
-                        min={receivedDate}
-                        className="w-full px-3 py-2 bg-white border border-blue-300 rounded-lg text-xs font-bold text-slate-800"
-                      />
-                    </div>
-                    <span className="text-xs text-blue-900 font-medium">
-                      Customer portal will immediately update with this delivery commitment.
-                    </span>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 p-2.5 rounded-lg">
-                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>
-                    The factory manager will receive a pending notification on the dashboard to review and set the Estimated Delivery Date.
-                  </span>
-                </div>
-              )}
+          {formError && (
+            <div className="flex items-start gap-2 text-xs text-red-900 bg-red-50 border border-red-200 p-3 rounded-lg">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+              <span>{formError}</span>
             </div>
           )}
 

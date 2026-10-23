@@ -281,6 +281,7 @@ export interface MaterialInward {
   bundleSpecs: BundleSpecifications;
   
   customerInstructions: string; // special customer instructions (e.g., slit to 20mm, bundles 25-30kg max, 10 reels/20 reams per bundle)
+  requestedSlitCuts?: SlitCut[]; // slit widths the customer asked for at inward entry
 
   // Production Tracking
   status: ProductionStatus;
