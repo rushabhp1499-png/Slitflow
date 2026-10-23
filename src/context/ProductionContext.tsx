@@ -131,7 +131,7 @@ interface ProductionContextType {
     customerInstructions: string;
     assignedMachine?: string;
     estimatedDeliveryDate?: string;
-  }) => MaterialInward;
+  }) => MaterialInward | null;
 
   updateJobStatus: (jobId: string, status: ProductionStatus, note?: string) => void;
   updateEstimatedDeliveryDate: (jobId: string, eddDate: string, note?: string, changedBy?: string) => void;
@@ -852,6 +852,10 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       customers.find(c => c.id === data.customerId) ||
       currentCustomer ||
       customers[0];
+    if (!customer) {
+      reportSyncError('Add the customer first (Manage Customers), then record the inward material.');
+      return null;
+    }
 
     // The database replaces this with the next real job number when it saves the order.
     const jobNo = 'PENDING';

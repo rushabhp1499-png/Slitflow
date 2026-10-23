@@ -17,6 +17,35 @@ import { PoCloseModal } from './components/PoCloseModal';
 import { MaterialInward } from './types';
 import { COMPANY_INFO } from './data/mockData';
 
+// Shows a message instead of a blank page if a screen crashes.
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="max-w-md bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-3 text-center">
+          <AlertCircle className="w-7 h-7 text-red-600 mx-auto" />
+          <h2 className="font-bold text-slate-900">Something went wrong on this screen</h2>
+          <p className="text-xs text-slate-600 font-mono break-words">{this.state.error.message}</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold"
+          >
+            Reload
+          </button>
+        </div>
+      </div>
+    );
+  }
+}
+
 // Shown when the .env file with the Supabase settings is missing.
 function SetupRequired() {
   return (
@@ -333,7 +362,9 @@ export default function App() {
   if (!isSupabaseConfigured) return <SetupRequired />;
   return (
     <ProductionProvider>
-      <MainAppContent />
+      <ErrorBoundary>
+        <MainAppContent />
+      </ErrorBoundary>
       <SyncErrorToast />
     </ProductionProvider>
   );

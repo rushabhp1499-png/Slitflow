@@ -61,8 +61,8 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
   const selectedCustomer =
     customers.find((c) => c.id === selectedCustomerId) || customers[0];
 
-  // Editable customer state
-  const [editForm, setEditForm] = useState<Customer>(selectedCustomer);
+  // Editable customer state (undefined until a customer exists, e.g. a new empty database)
+  const [editForm, setEditForm] = useState<Customer | undefined>(selectedCustomer);
 
   // When selected customer changes, sync editForm
   React.useEffect(() => {
@@ -321,7 +321,7 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
                   </button>
                 </div>
               </form>
-            ) : selectedCustomer ? (
+            ) : selectedCustomer && editForm ? (
               /* View & Edit Customer Details */
               <div className="space-y-6">
                 
@@ -530,7 +530,22 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
                 </form>
 
               </div>
-            ) : null}
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center gap-3 py-16">
+                <Users className="w-8 h-8 text-slate-300" />
+                <p className="text-sm font-bold text-slate-700">No customers yet</p>
+                <p className="text-xs text-slate-500 max-w-xs">
+                  Add your first customer company and the email IDs allowed to track its orders.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCustomer(true)}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add New Customer
+                </button>
+              </div>
+            )}
           </div>
 
         </div>
