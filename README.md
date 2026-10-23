@@ -34,6 +34,7 @@ Industrial production tracking, precision slitting management, customer portal, 
 ## Technical Stack
 
 - **Framework**: React 19 + TypeScript + Vite 6
+- **Database, sign-in & live updates**: Supabase (Postgres, Auth, Realtime) - setup steps in [SUPABASE_SETUP.md](SUPABASE_SETUP.md), schema in [supabase/schema.sql](supabase/schema.sql)
 - **Styling**: Tailwind CSS
 - **Icons**: Lucide React
 - **Hosting & Runtime**: Vite SPA / Node.js

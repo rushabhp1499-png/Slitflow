@@ -23,7 +23,13 @@ export const LoginPage: React.FC = () => {
     loginFactory,
     loginCustomerByEmail,
     registerCustomer,
+    sendPasswordReset,
+    syncError,
+    clearSyncError,
   } = useProduction();
+
+  // True while waiting for the database, so buttons cannot be pressed twice.
+  const [busy, setBusy] = useState(false);
 
   // Active portal tab: 'customer' or 'factory'
   const [activePortalTab, setActivePortalTab] = useState<'customer' | 'factory'>('customer');
@@ -59,7 +65,7 @@ export const LoginPage: React.FC = () => {
   const [regSuccess, setRegSuccess] = useState('');
 
   // 1. Factory Login Handler
-  const handleFactorySubmit = (e: React.FormEvent) => {
+  const handleFactorySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFactoryError('');
     setFactorySuccess('');
@@ -69,7 +75,9 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
-    const res = loginFactory(factoryEmail.trim(), factoryPassword);
+    setBusy(true);
+    const res = await loginFactory(factoryEmail.trim(), factoryPassword);
+    setBusy(false);
     if (res.success) {
       setFactorySuccess(res.message);
     } else {
@@ -78,7 +86,7 @@ export const LoginPage: React.FC = () => {
   };
 
   // 2. Customer Email + Password Login Handler
-  const handleClientEmailSubmit = (e: React.FormEvent) => {
+  const handleClientEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setClientError('');
     setClientSuccess('');
@@ -93,7 +101,27 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
-    const res = loginCustomerByEmail(clientEmail.trim(), clientPassword);
+    setBusy(true);
+    const res = await loginCustomerByEmail(clientEmail.trim(), clientPassword);
+    setBusy(false);
+    if (res.success) {
+      setClientSuccess(res.message);
+    } else {
+      setClientError(res.message);
+    }
+  };
+
+  // Emails a link to choose a new password.
+  const handleForgotPassword = async () => {
+    setClientError('');
+    setClientSuccess('');
+    if (!clientEmail.trim()) {
+      setClientError('Type your email address above first, then click "Forgot password?".');
+      return;
+    }
+    setBusy(true);
+    const res = await sendPasswordReset(clientEmail.trim());
+    setBusy(false);
     if (res.success) {
       setClientSuccess(res.message);
     } else {
@@ -102,7 +130,7 @@ export const LoginPage: React.FC = () => {
   };
 
   // 3. Customer Registration Handler with Password Creation & Compulsory Company Name
-  const handleCustomerRegister = (e: React.FormEvent) => {
+  const handleCustomerRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setRegError('');
     setRegSuccess('');
@@ -132,19 +160,23 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
-    const res = registerCustomer({
+    setBusy(true);
+    const res = await registerCustomer({
       name: regCompany.trim(),
       companyName: regCompany.trim(),
       contactPerson: regContact.trim(),
       email: regEmail.trim(),
       password: regPassword,
-      phone: regPhone.trim() || '+91 98000 00000',
-      address: regAddress.trim() || 'Plant Delivery Address',
-      registeredAddress: regAddress.trim() || 'Registered Address',
-      plantAddress: regAddress.trim() || 'Plant Works',
+      phone: regPhone.trim(),
+      registeredAddress: regAddress.trim(),
+      plantAddress: regAddress.trim(),
       gstNumber: regGst.trim().toUpperCase() || '',
       authorizedEmails: [regEmail.trim()],
+      city: '',
+      state: 'Maharashtra',
+      stateCode: '27',
     });
+    setBusy(false);
 
     if (res.success) {
       setRegSuccess(res.message);
@@ -223,6 +255,16 @@ export const LoginPage: React.FC = () => {
           </div>
 
           <div className="p-6 sm:p-8">
+
+            {syncError && (
+              <div className="mb-5 bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-950 flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span className="flex-1">{syncError}</span>
+                <button type="button" onClick={clearSyncError} className="text-amber-700 hover:text-amber-950" title="Dismiss">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
 
             {/* TAB 1: CUSTOMER PORTAL */}
             {activePortalTab === 'customer' && (
@@ -340,10 +382,19 @@ export const LoginPage: React.FC = () => {
                             )}
                           </button>
                         </div>
+                        <button
+                          type="button"
+                          onClick={handleForgotPassword}
+                          disabled={busy}
+                          className="mt-1.5 text-[11px] font-semibold text-blue-700 hover:text-blue-900 underline"
+                        >
+                          Forgot password?
+                        </button>
                       </div>
 
                       <button
                         type="submit"
+                        disabled={busy}
                         className="w-full py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs sm:text-sm font-bold shadow-sm transition flex items-center justify-center gap-2"
                       >
                         <Lock className="w-4 h-4" />
@@ -537,6 +588,7 @@ export const LoginPage: React.FC = () => {
 
                     <button
                       type="submit"
+                      disabled={busy}
                       className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs sm:text-sm font-bold shadow-sm transition flex items-center justify-center gap-2"
                     >
                       <PlusCircle className="w-4 h-4" />
@@ -623,6 +675,7 @@ export const LoginPage: React.FC = () => {
 
                 <button
                   type="submit"
+                  disabled={busy}
                   className="w-full py-3 bg-slate-900 hover:bg-slate-800 active:bg-black text-white rounded-xl text-xs sm:text-sm font-bold shadow-md transition flex items-center justify-center gap-2"
                 >
                   <ShieldCheck className="w-4 h-4 text-amber-400" />

@@ -25,6 +25,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     customers,
     selectedCustomerId,
     currentCustomer: contextCustomer,
+    signedInEmail,
   } = useProduction();
 
   const unreadNotifs = notifications.filter((n) => !n.read).length;
@@ -89,7 +90,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <span>Factory Admin</span>
                     </span>
                     <span className="font-mono text-[10px] text-slate-400">
-                      progressive.ent8@gmail.com
+                      {signedInEmail}
                     </span>
                   </div>
                 </div>

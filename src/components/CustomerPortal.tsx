@@ -49,27 +49,9 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
     setSelectedCustomerId,
     authenticatedEmail,
     logoutCustomer,
-    loginCustomerByEmail,
-    loginCustomerByAccessCode,
-    registerCustomer,
   } = useProduction();
 
   const [copiedLink, setCopiedLink] = useState(false);
-
-  // Login & Registration State
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginCode, setLoginCode] = useState('');
-  const [authTab, setAuthTab] = useState<'email' | 'code' | 'register'>('email');
-  const [authError, setAuthError] = useState('');
-  const [authSuccess, setAuthSuccess] = useState('');
-
-  // New Customer Registration Inputs
-  const [regCompany, setRegCompany] = useState('');
-  const [regContact, setRegContact] = useState('');
-  const [regEmail, setRegEmail] = useState('');
-  const [regPhone, setRegPhone] = useState('');
-  const [regAddress, setRegAddress] = useState('');
-  const [regGst, setRegGst] = useState('');
 
   // Find customer matching the authenticated email or selected customer ID
   const matchedCustomer =
@@ -86,71 +68,6 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
   const currentCustomer = matchedCustomer;
 
   const [bundleFilter, setBundleFilter] = useState<'all' | 'ready' | 'dispatched'>('all');
-
-  const handleEmailLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError('');
-    setAuthSuccess('');
-    if (!loginEmail.trim()) return;
-
-    const res = loginCustomerByEmail(loginEmail.trim());
-    if (!res.success) {
-      setAuthError(
-        res.message ||
-          `Access Denied: "${loginEmail}" is not registered. Click "Create New Account" below to register your company.`
-      );
-    }
-  };
-
-  const handleCodeLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError('');
-    setAuthSuccess('');
-    if (!loginCode.trim()) return;
-
-    const res = loginCustomerByAccessCode(loginCode.trim());
-    if (!res.success) {
-      setAuthError(
-        res.message ||
-          `Invalid Access Code "${loginCode}". Check your receipt or click "Create New Account" to register.`
-      );
-    }
-  };
-
-  const handleRegisterNewCustomer = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError('');
-    setAuthSuccess('');
-
-    if (!regCompany.trim()) {
-      setAuthError('Company Name is strictly compulsory. Please enter your company or firm name.');
-      return;
-    }
-
-    if (!regEmail.trim() || !regContact.trim()) {
-      setAuthError('Please provide Contact Person and Authorized Email ID.');
-      return;
-    }
-
-    const res = registerCustomer({
-      name: regCompany.trim(),
-      companyName: regCompany.trim(),
-      contactPerson: regContact.trim(),
-      email: regEmail.trim(),
-      phone: regPhone.trim() || '+91 98000 00000',
-      address: regAddress.trim() || 'Plant Delivery Address',
-      registeredAddress: regAddress.trim() || 'Registered Office Address',
-      plantAddress: regAddress.trim() || 'Plant Delivery Works',
-      gstNumber: regGst.trim().toUpperCase() || '27AAACP0000A1Z5',
-      authorizedEmails: [regEmail.trim()],
-    });
-
-    if (res.success) {
-      setAuthSuccess(res.message);
-    } else {
-      setAuthError(res.message || 'Failed to create customer account.');
-    }
-  };
 
   // Filter jobs only for this authenticated customer
   const customerJobs = jobs.filter((j) => j.customerId === currentCustomer?.id);
@@ -170,9 +87,8 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
     customerJobs.find((j) => j.id === selectedJobId) || customerJobs[0];
 
   const handleCopyTrackingLink = () => {
-    const origin = window.location.origin;
-    const trackingUrl = `${origin}?track=${currentCustomer?.accessCode || currentCustomer?.id}`;
-    navigator.clipboard.writeText(trackingUrl);
+    // Colleagues sign in with their own authorized email to see live tracking.
+    navigator.clipboard.writeText(window.location.origin);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
   };
@@ -237,234 +153,23 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
     : [];
 
   if (!isAuthenticated) {
+    // Signed in, but the company record has not loaded (or access was removed).
     return (
-      <div className="max-w-2xl mx-auto space-y-6 py-6 animate-in fade-in duration-200">
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden">
-          <div className="bg-slate-900 text-white px-6 py-5 border-b border-slate-800">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-blue-600/30 text-blue-400 border border-blue-500/30 rounded-xl">
-                <ShieldCheck className="w-6 h-6" />
-              </div>
-              <div>
-                <h2 className="text-lg font-bold text-white">Customer Portal & Order Tracking</h2>
-                <p className="text-xs text-slate-400">
-                  Progressive Enterprises Precision Slitting Works
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-6 space-y-5">
-            {/* Factory Machine Registration Notice */}
-            <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-4 text-xs text-blue-950 flex items-start gap-3">
-              <Lock className="w-5 h-5 text-blue-700 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <span className="font-bold block text-blue-900">
-                  Factory-Registered Account Authorization
-                </span>
-                <p className="text-slate-700 leading-relaxed">
-                  The factory registers customer company details and authorized email IDs into the machine system. Only users with registered email IDs can open up their customer account.
-                </p>
-              </div>
-            </div>
-
-            {/* Error / Success Notifications */}
-            {authSuccess && (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-xs text-emerald-950 flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <span className="font-bold block text-emerald-900">Account Ready</span>
-                  <p className="leading-relaxed">{authSuccess}</p>
-                </div>
-              </div>
-            )}
-
-            {authError && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-900 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <span className="font-bold block">Notice</span>
-                  <p className="leading-relaxed">{authError}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Auth Mode Tabs (Login vs New Customer Account) */}
-            <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthTab('email');
-                  setAuthError('');
-                  setAuthSuccess('');
-                }}
-                className={`flex-1 py-2 rounded-lg transition ${
-                  authTab === 'email'
-                    ? 'bg-white text-blue-700 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Authorized Email
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthTab('register');
-                  setAuthError('');
-                  setAuthSuccess('');
-                }}
-                className={`flex-1 py-2 rounded-lg transition flex items-center justify-center gap-1 ${
-                  authTab === 'register'
-                    ? 'bg-white text-emerald-700 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Plus className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Create New Account</span>
-              </button>
-            </div>
-
-            {/* Email Form */}
-            {authTab === 'email' && (
-              <form onSubmit={handleEmailLogin} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                    Authorized Customer Email ID <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                    <input
-                      type="email"
-                      required
-                      placeholder="e.g. procurement@yourcompany.com"
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-600"
-                    />
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-1">
-                    Enter the authorized email registered with Progressive Enterprises.
-                  </p>
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-center gap-2"
-                >
-                  <Lock className="w-4 h-4" />
-                  <span>Open My Customer Account</span>
-                </button>
-              </form>
-            )}
-
-            {/* Create New Account Form */}
-            {authTab === 'register' && (
-              <form onSubmit={handleRegisterNewCustomer} className="space-y-3">
-                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-950">
-                  <span className="font-bold block text-emerald-900 mb-0.5">New Customer Self-Registration</span>
-                  Register your company to send material inward, submit slitting specifications, and receive live progress tracking & digital challans.
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">
-                    Company / Firm Legal Name <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Paramount Electricals & Stampings Pvt Ltd"
-                      value={regCompany}
-                      onChange={(e) => setRegCompany(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-600"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      Contact Person <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Ramesh Patil"
-                      value={regContact}
-                      onChange={(e) => setRegContact(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      Authorized Email <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                      <input
-                        type="email"
-                        required
-                        placeholder="e.g. purchase@paramount.com"
-                        value={regEmail}
-                        onChange={(e) => setRegEmail(e.target.value)}
-                        className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-600"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      Phone Number
-                    </label>
-                    <input
-                      type="tel"
-                      placeholder="e.g. +91 98220 12345"
-                      value={regPhone}
-                      onChange={(e) => setRegPhone(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1">
-                      GSTIN (Optional)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. 27ABCDE1234F1Z5"
-                      value={regGst}
-                      onChange={(e) => setRegGst(e.target.value.toUpperCase())}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono uppercase text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-600"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">
-                    Plant Delivery / Works Address
-                  </label>
-                  <textarea
-                    rows={2}
-                    placeholder="e.g. Sector 10, PCMC Industrial Area, Pune 411019"
-                    value={regAddress}
-                    onChange={(e) => setRegAddress(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:bg-white focus:ring-2 focus:ring-emerald-600"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Create Account & Start Inward</span>
-                </button>
-              </form>
-            )}
-
-          </div>
+      <div className="max-w-2xl mx-auto py-10">
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 text-center space-y-3">
+          <ShieldCheck className="w-8 h-8 text-blue-600 mx-auto" />
+          <h2 className="text-lg font-bold text-slate-900">Loading your company account...</h2>
+          <p className="text-xs text-slate-600">
+            If this does not finish, your email may no longer be authorized. Please contact Progressive Enterprises.
+          </p>
+          <button
+            type="button"
+            onClick={logoutCustomer}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
+          </button>
         </div>
       </div>
     );

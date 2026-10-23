@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import {
   MaterialInward,
   Customer,
@@ -18,10 +18,22 @@ import {
 import {
   INITIAL_JOBS,
   INITIAL_CUSTOMERS,
-  INITIAL_NOTIFICATIONS,
   INITIAL_FACTORY_USERS,
-  COMPANY_INFO
 } from '../data/mockData';
+import { supabase, getSupabase, errorMessage } from '../lib/supabase';
+import { TableSync, SyncedRow } from '../lib/tableSync';
+
+type AuthResult = { success: boolean; message: string };
+
+interface Account {
+  role: 'staff' | 'customer';
+  customerId: string | null;
+}
+
+export interface LocalImportSummary {
+  jobs: number;
+  customers: number;
+}
 
 export interface ReviseChallanParams {
   reason: string; // Mandatory audit justification
@@ -61,9 +73,19 @@ interface ProductionContextType {
   selectedCustomerId: string;
   setSelectedCustomerId: (id: string) => void;
   
-  // Factory Management & Superadmin Authentication (progressive.ent8@gmail.com / Progressive@123)
+  // Database connection & sign-in state
+  authLoading: boolean;
+  dataLoading: boolean;
+  signedInEmail: string | null;
+  syncError: string | null;
+  clearSyncError: () => void;
+  localImport: LocalImportSummary | null;
+  importLocalBrowserData: () => Promise<AuthResult>;
+  dismissLocalImport: () => void;
+
+  // Factory staff authentication (emails listed in the staff_emails table)
   isFactoryAuthenticated: boolean;
-  loginFactory: (email: string, password: string) => { success: boolean; message: string };
+  loginFactory: (email: string, password: string) => Promise<AuthResult>;
   logoutFactory: () => void;
   factoryUsers: FactoryUser[];
   activeFactoryUser: FactoryUser | null;
@@ -76,20 +98,16 @@ interface ProductionContextType {
   // Customer Session & Portal Authentication
   authenticatedEmail: string | null;
   currentCustomer: Customer | null;
-  loginCustomerByEmail: (email: string, password?: string) => { success: boolean; customer?: Customer; message: string };
-  loginCustomerWithGoogle: (googleEmail: string, googleName?: string, companyName?: string, password?: string) => {
-    success: boolean;
-    message: string;
-    requiresCompany?: boolean;
-    customer?: Customer;
-  };
-  loginCustomerByAccessCode: (code: string) => { success: boolean; customer?: Customer; message: string };
+  loginCustomerByEmail: (email: string, password: string) => Promise<AuthResult>;
+  sendPasswordReset: (email: string) => Promise<AuthResult>;
+  passwordRecovery: boolean;
+  completePasswordReset: (newPassword: string) => Promise<AuthResult>;
   logoutCustomer: () => void;
   logoutAll: () => void;
-  
+
   // Customer Management
   addCustomer: (customerData: Omit<Customer, 'id'>) => Customer;
-  registerCustomer: (customerData: Omit<Customer, 'id' | 'accessCode'>) => { success: boolean; customer: Customer; message: string };
+  registerCustomer: (customerData: Omit<Customer, 'id' | 'accessCode'>) => Promise<AuthResult>;
   updateCustomer: (customerId: string, customerData: Partial<Customer>) => void;
   addAuthorizedEmail: (customerId: string, newEmail: string) => void;
   removeAuthorizedEmail: (customerId: string, emailToRemove: string) => void;
@@ -202,223 +220,276 @@ interface ProductionContextType {
 
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
-  resetToSampleData: () => void;
   getJobById: (id: string) => MaterialInward | undefined;
 }
 
-const STORAGE_KEY_FACTORY_AUTH = 'progressive_enterprises_factory_auth_v5';
-const STORAGE_KEY_JOBS = 'progressive_enterprises_jobs_v4';
-const STORAGE_KEY_CUSTOMERS = 'progressive_enterprises_customers_v4';
-const STORAGE_KEY_NOTIFS = 'progressive_enterprises_notifs_v4';
-const STORAGE_KEY_ROLE = 'progressive_enterprises_role_v4';
-const STORAGE_KEY_CUST_ID = 'progressive_enterprises_selected_cust_v4';
-const STORAGE_KEY_AUTH_EMAIL = 'progressive_enterprises_auth_email_v4';
-const STORAGE_KEY_FACTORY_USERS = 'progressive_enterprises_factory_users_v4';
-const STORAGE_KEY_ACTIVE_FACTORY_USER = 'progressive_enterprises_active_factory_user_v4';
-const STORAGE_KEY_DRIVE_URL = 'progressive_enterprises_drive_url_v4';
+// Keys used by the old browser-only version. Only read once, to offer importing them.
+const LEGACY_KEY_JOBS = 'progressive_enterprises_jobs_v4';
+const LEGACY_KEY_CUSTOMERS = 'progressive_enterprises_customers_v4';
+const LEGACY_KEY_IMPORT_DONE = 'slitflow_legacy_import_done_v1';
 const DEFAULT_DRIVE_URL = 'https://drive.google.com/drive/my-drive';
 
-// Factory Superadmin Credentials
-export const FACTORY_SUPERADMIN_EMAIL = 'progressive.ent8@gmail.com';
-export const FACTORY_SUPERADMIN_PASSWORD = 'Progressive@123';
+const SAMPLE_JOB_IDS = new Set(INITIAL_JOBS.map(j => j.id));
+const SAMPLE_CUSTOMER_IDS = new Set(INITIAL_CUSTOMERS.map(c => c.id));
+
+const stripPassword = (c: Customer): Customer => {
+  const { password: _password, ...rest } = c;
+  return rest as Customer;
+};
+
+const readLegacyData = (): { jobs: MaterialInward[]; customers: Customer[] } | null => {
+  try {
+    if (localStorage.getItem(LEGACY_KEY_IMPORT_DONE)) return null;
+    const rawJobs = localStorage.getItem(LEGACY_KEY_JOBS);
+    const rawCustomers = localStorage.getItem(LEGACY_KEY_CUSTOMERS);
+    if (!rawJobs && !rawCustomers) return null;
+    const jobs: MaterialInward[] = (rawJobs ? JSON.parse(rawJobs) : []).filter(
+      (j: MaterialInward) => j && j.id && !SAMPLE_JOB_IDS.has(j.id)
+    );
+    const usedCustomerIds = new Set(jobs.map(j => j.customerId));
+    const customers: Customer[] = (rawCustomers ? JSON.parse(rawCustomers) : []).filter(
+      (c: Customer) => c && c.id && (!SAMPLE_CUSTOMER_IDS.has(c.id) || usedCustomerIds.has(c.id))
+    );
+    if (jobs.length === 0 && customers.length === 0) return null;
+    return { jobs, customers };
+  } catch {
+    return null;
+  }
+};
 
 const ProductionContext = createContext<ProductionContextType | undefined>(undefined);
 
 export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isFactoryAuthenticated, setIsFactoryAuthenticated] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem(STORAGE_KEY_FACTORY_AUTH) === 'true';
-    } catch {
-      return false;
-    }
-  });
-  const [jobs, setJobs] = useState<MaterialInward[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_JOBS);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error('Failed to load jobs from localStorage', e);
-    }
-    return INITIAL_JOBS;
-  });
+  // ---------------------------------------------------------------------
+  // Sign-in state (Supabase Auth)
+  // ---------------------------------------------------------------------
+  const [authLoading, setAuthLoading] = useState<boolean>(!!supabase);
+  const [dataLoading, setDataLoading] = useState<boolean>(false);
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+  const [signedInEmail, setSignedInEmail] = useState<string | null>(null);
+  const [account, setAccount] = useState<Account | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [localImport, setLocalImport] = useState<LocalImportSummary | null>(null);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
 
-  const [customers, setCustomers] = useState<Customer[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_CUSTOMERS);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error('Failed to load customers from localStorage', e);
-    }
-    return INITIAL_CUSTOMERS;
-  });
+  const isFactoryAuthenticated = account?.role === 'staff';
+  const authenticatedEmail = account?.role === 'customer' ? signedInEmail : null;
 
-  const [factoryUsers, setFactoryUsers] = useState<FactoryUser[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_FACTORY_USERS);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error('Failed to load factory users from localStorage', e);
-    }
-    return INITIAL_FACTORY_USERS;
-  });
+  // ---------------------------------------------------------------------
+  // Data (loaded from the database after sign-in)
+  // ---------------------------------------------------------------------
+  const [jobs, setJobs] = useState<MaterialInward[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
-  const [activeFactoryUserId, setActiveFactoryUserId] = useState<string | null>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_ACTIVE_FACTORY_USER);
-      if (saved) return saved;
-    } catch {
-      // ignore
-    }
-    return INITIAL_FACTORY_USERS[0].id;
-  });
+  // Factory staff badges are not stored in the database yet; kept in memory.
+  const [factoryUsers, setFactoryUsers] = useState<FactoryUser[]>(INITIAL_FACTORY_USERS);
+  const [activeFactoryUserId, setActiveFactoryUserId] = useState<string | null>(INITIAL_FACTORY_USERS[0]?.id || null);
 
-  const [notifications, setNotifications] = useState<AppNotification[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_NOTIFS);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.error('Failed to load notifications from localStorage', e);
-    }
-    return INITIAL_NOTIFICATIONS;
-  });
+  const [activeRoleState, setActiveRole] = useState<'factory' | 'customer'>('factory');
+  const activeRole: 'factory' | 'customer' = account?.role === 'customer' ? 'customer' : activeRoleState;
 
-  const [activeRole, setActiveRole] = useState<'factory' | 'customer'>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_ROLE);
-      if (saved === 'factory' || saved === 'customer') return saved;
-    } catch {
-      // ignore
-    }
-    return 'factory';
-  });
+  const [selectedCustomerIdState, setSelectedCustomerId] = useState<string>('');
+  const selectedCustomerId =
+    account?.role === 'customer' && account.customerId ? account.customerId : selectedCustomerIdState;
 
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_CUST_ID);
-      if (saved) return saved;
-    } catch {
-      // ignore
-    }
-    return INITIAL_CUSTOMERS[0].id;
-  });
+  const [driveWebLink, setDriveWebLinkState] = useState<string>(DEFAULT_DRIVE_URL);
+  const setDriveWebLink = (url: string) => setDriveWebLinkState(url.trim() || DEFAULT_DRIVE_URL);
 
-  const [authenticatedEmail, setAuthenticatedEmail] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(STORAGE_KEY_AUTH_EMAIL) || null;
-    } catch {
-      return null;
-    }
-  });
+  const reportSyncError = useCallback((message: string) => {
+    console.error(message);
+    setSyncError(message);
+  }, []);
+  const clearSyncError = () => setSyncError(null);
 
-  const [driveWebLink, setDriveWebLinkState] = useState<string>(() => {
-    try {
-      return localStorage.getItem(STORAGE_KEY_DRIVE_URL) || DEFAULT_DRIVE_URL;
-    } catch {
-      return DEFAULT_DRIVE_URL;
-    }
-  });
+  // Latest values for the sync helpers, which run outside React renders.
+  const jobsRef = useRef(jobs);
+  jobsRef.current = jobs;
+  const customersRef = useRef(customers);
+  customersRef.current = customers;
+  const accountRef = useRef(account);
+  accountRef.current = account;
 
-  const setDriveWebLink = (url: string) => {
-    const cleanUrl = url.trim() || DEFAULT_DRIVE_URL;
-    setDriveWebLinkState(cleanUrl);
-    try {
-      localStorage.setItem(STORAGE_KEY_DRIVE_URL, cleanUrl);
-    } catch (e) {
-      console.error('Failed to save drive URL', e);
-    }
+  const jobsSync = useRef(
+    new TableSync<MaterialInward>({
+      table: 'jobs',
+      toColumns: job => ({ customer_id: job.customerId }),
+      getLocal: () => jobsRef.current,
+      setLocal: updater => setJobs(updater),
+      canInsert: () => !!accountRef.current,
+      canUpdate: () => accountRef.current?.role === 'staff',
+      onError: reportSyncError,
+    })
+  ).current;
+
+  const customersSync = useRef(
+    new TableSync<Customer>({
+      table: 'customers',
+      toColumns: () => ({}),
+      prepare: stripPassword,
+      getLocal: () => customersRef.current,
+      setLocal: updater => setCustomers(updater),
+      canInsert: () => accountRef.current?.role === 'staff',
+      canUpdate: () => accountRef.current?.role === 'staff',
+      onError: reportSyncError,
+    })
+  ).current;
+
+  // Asks the database which role this login has (creating the customer
+  // company on the first sign-in after registration).
+  const linkAccount = async (): Promise<Account | null> => {
+    const { data, error } = await getSupabase().rpc('link_my_account');
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return null;
+    return { role: row.account_role, customerId: row.account_customer_id };
   };
 
+  // Follow the Supabase session (restored on page load, sign-in, sign-out).
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_JOBS, JSON.stringify(jobs));
-    } catch (e) {
-      console.error('Failed to save jobs to localStorage', e);
-    }
-  }, [jobs]);
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data }) => {
+      setSessionUserId(data.session?.user.id || null);
+      setSignedInEmail(data.session?.user.email?.toLowerCase() || null);
+      if (!data.session) setAuthLoading(false);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') setPasswordRecovery(true);
+      setSessionUserId(session?.user.id || null);
+      setSignedInEmail(session?.user.email?.toLowerCase() || null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
 
+  // Resolve the role whenever a different user is signed in.
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_CUSTOMERS, JSON.stringify(customers));
-    } catch (e) {
-      console.error('Failed to save customers to localStorage', e);
+    if (!supabase) return;
+    if (!sessionUserId) {
+      setAccount(null);
+      setAuthLoading(false);
+      return;
     }
-  }, [customers]);
+    let cancelled = false;
+    setAuthLoading(true);
+    linkAccount()
+      .then(acc => {
+        if (cancelled) return;
+        if (!acc) {
+          reportSyncError(
+            'This email is not linked to any company yet. Ask Progressive Enterprises to add your email to your company, or create a new account.'
+          );
+          void supabase!.auth.signOut();
+        }
+        setAccount(acc);
+      })
+      .catch(e => {
+        if (cancelled) return;
+        reportSyncError(errorMessage(e));
+        setAccount(null);
+        void supabase!.auth.signOut();
+      })
+      .finally(() => {
+        if (!cancelled) setAuthLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionUserId]);
 
+  // Load everything this login may see, then subscribe to live changes.
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_NOTIFS, JSON.stringify(notifications));
-    } catch (e) {
-      console.error('Failed to save notifications to localStorage', e);
+    if (!supabase) return;
+    jobsSync.reset();
+    customersSync.reset();
+    if (!account) {
+      setJobs([]);
+      setCustomers([]);
+      setNotifications([]);
+      setLocalImport(null);
+      return;
     }
-  }, [notifications]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_ROLE, activeRole);
-    } catch {
-      // ignore
-    }
-  }, [activeRole]);
+    let cancelled = false;
+    const sb = supabase;
+    setDataLoading(true);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_CUST_ID, selectedCustomerId);
-    } catch {
-      // ignore
-    }
-  }, [selectedCustomerId]);
-
-  useEffect(() => {
-    try {
-      if (authenticatedEmail) {
-        localStorage.setItem(STORAGE_KEY_AUTH_EMAIL, authenticatedEmail);
-      } else {
-        localStorage.removeItem(STORAGE_KEY_AUTH_EMAIL);
+    const load = async () => {
+      const [jobsRes, customersRes, notifsRes] = await Promise.all([
+        sb.from('jobs').select('id, data, updated_at').order('created_at', { ascending: false }),
+        sb.from('customers').select('id, data, updated_at').order('created_at', { ascending: true }),
+        sb.from('notifications').select('id, data').order('created_at', { ascending: false }).limit(300),
+      ]);
+      if (cancelled) return;
+      const firstError = jobsRes.error || customersRes.error || notifsRes.error;
+      if (firstError) {
+        reportSyncError(`Could not load data from the database: ${errorMessage(firstError)}`);
       }
-    } catch {
-      // ignore
-    }
-  }, [authenticatedEmail]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY_FACTORY_USERS, JSON.stringify(factoryUsers));
-    } catch (e) {
-      console.error('Failed to save factory users to localStorage', e);
-    }
-  }, [factoryUsers]);
-
-  useEffect(() => {
-    try {
-      if (activeFactoryUserId) {
-        localStorage.setItem(STORAGE_KEY_ACTIVE_FACTORY_USER, activeFactoryUserId);
-      } else {
-        localStorage.removeItem(STORAGE_KEY_ACTIVE_FACTORY_USER);
+      setJobs(jobsSync.seed((jobsRes.data || []) as SyncedRow<MaterialInward>[]));
+      setCustomers(customersSync.seed((customersRes.data || []) as SyncedRow<Customer>[]));
+      setNotifications(((notifsRes.data || []) as { data: AppNotification }[]).map(r => r.data));
+      if (account.role === 'customer' && account.customerId) {
+        setSelectedCustomerId(account.customerId);
+      } else if (customersRes.data && customersRes.data.length > 0) {
+        setSelectedCustomerId(prev => prev || (customersRes.data![0] as SyncedRow<Customer>).id);
       }
-    } catch {
-      // ignore
-    }
-  }, [activeFactoryUserId]);
+      if (account.role === 'staff') {
+        const legacy = readLegacyData();
+        setLocalImport(legacy ? { jobs: legacy.jobs.length, customers: legacy.customers.length } : null);
+      }
+      setDataLoading(false);
+    };
+    void load();
+
+    const channel = sb
+      .channel(`slitflow-live-${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs' }, payload => {
+        const id = ((payload.new as { id?: string }) || {}).id || ((payload.old as { id?: string }) || {}).id;
+        if (id) jobsSync.receiveRemote(id);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, payload => {
+        const id = ((payload.new as { id?: string }) || {}).id || ((payload.old as { id?: string }) || {}).id;
+        if (id) customersSync.receiveRemote(id);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, payload => {
+        const row = payload.new as { id?: string; data?: AppNotification };
+        if (!row?.id || !row.data) return;
+        const incoming = row.data;
+        setNotifications(prev => {
+          const idx = prev.findIndex(n => n.id === incoming.id);
+          if (idx === -1) return [incoming, ...prev];
+          const next = prev.slice();
+          next[idx] = incoming;
+          return next;
+        });
+      })
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      void sb.removeChannel(channel);
+    };
+  }, [account?.role, account?.customerId]);
+
+  // Save every local change to the database.
+  useEffect(() => {
+    if (account && !dataLoading) jobsSync.syncAll();
+  }, [jobs, account, dataLoading]);
+
+  useEffect(() => {
+    if (account && !dataLoading) customersSync.syncAll();
+  }, [customers, account, dataLoading]);
 
   const activeFactoryUser = factoryUsers.find(u => u.id === activeFactoryUserId) || null;
 
-  // Active customer resolved by authenticated email or selected ID
   const currentCustomer = React.useMemo<Customer | null>(() => {
-    if (authenticatedEmail) {
-      const cleanEmail = authenticatedEmail.trim().toLowerCase();
-      const byEmail = customers.find(
-        (c) =>
-          c.authorizedEmails.some((ae) => ae.toLowerCase() === cleanEmail) ||
-          c.email.toLowerCase() === cleanEmail
-      );
-      if (byEmail) return byEmail;
+    if (account?.role === 'customer') {
+      return customers.find(c => c.id === account.customerId) || null;
     }
     if (selectedCustomerId) {
-      const byId = customers.find((c) => c.id === selectedCustomerId);
-      if (byId) return byId;
+      return customers.find(c => c.id === selectedCustomerId) || null;
     }
     return null;
-  }, [customers, authenticatedEmail, selectedCustomerId]);
+  }, [customers, account, selectedCustomerId]);
 
   const loginFactoryUser = (userIdOrPinOrEmail: string) => {
     const input = userIdOrPinOrEmail.trim().toLowerCase();
@@ -494,332 +565,221 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       read: false,
     };
     setNotifications(prev => [newNotif, ...prev]);
-  };
-
-  // Factory Superadmin Login (progressive.ent8@gmail.com / Progressive@123)
-  const loginFactory = (email: string, pass: string) => {
-    if (
-      email.trim().toLowerCase() === FACTORY_SUPERADMIN_EMAIL.toLowerCase() &&
-      pass === FACTORY_SUPERADMIN_PASSWORD
-    ) {
-      setIsFactoryAuthenticated(true);
-      setActiveRole('factory');
-      setAuthenticatedEmail(null);
-      try {
-        localStorage.setItem(STORAGE_KEY_FACTORY_AUTH, 'true');
-        localStorage.setItem(STORAGE_KEY_ROLE, 'factory');
-        localStorage.removeItem(STORAGE_KEY_AUTH_EMAIL);
-      } catch {
-        // ignore
-      }
-      return {
-        success: true,
-        message: 'Factory access authorized. Welcome to Progressive Enterprises Dashboard.',
-      };
+    if (supabase && accountRef.current) {
+      void supabase
+        .from('notifications')
+        .insert({ id: newNotif.id, customer_id: customerId || null, data: newNotif })
+        .then(({ error }) => {
+          if (error) console.error('Failed to save notification', error);
+        });
     }
-    return {
-      success: false,
-      message: 'Access Denied: Invalid factory Login ID or Password. Only authorized factory management can sign in.',
-    };
   };
 
-  const logoutFactory = () => {
-    setIsFactoryAuthenticated(false);
+  // Signs in with Supabase Auth and checks which role the login has.
+  const signIn = async (email: string, password: string): Promise<Account | AuthResult> => {
+    if (!supabase) return { success: false, message: 'The database is not configured yet (missing .env settings).' };
+    setSyncError(null);
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    if (error) {
+      const msg = /confirm/i.test(error.message)
+        ? 'Please confirm your email first - open the confirmation link we emailed you, then sign in.'
+        : 'Incorrect email or password.';
+      return { success: false, message: msg };
+    }
     try {
-      localStorage.removeItem(STORAGE_KEY_FACTORY_AUTH);
-    } catch {
-      // ignore
-    }
-  };
-
-  const logoutAll = () => {
-    setIsFactoryAuthenticated(false);
-    setAuthenticatedEmail(null);
-    try {
-      localStorage.removeItem(STORAGE_KEY_FACTORY_AUTH);
-      localStorage.removeItem(STORAGE_KEY_AUTH_EMAIL);
-      localStorage.removeItem(STORAGE_KEY_ROLE);
-    } catch {
-      // ignore
-    }
-  };
-
-  // Customer portal authentication by email and password
-  const loginCustomerByEmail = (email: string, password?: string) => {
-    const cleanEmail = email.trim().toLowerCase();
-    const matchedCustomer = customers.find(c =>
-      c.authorizedEmails.some(ae => ae.toLowerCase() === cleanEmail) ||
-      c.email.toLowerCase() === cleanEmail
-    );
-
-    if (!matchedCustomer) {
-      return {
-        success: false,
-        message: `Email "${email}" is not registered. Please click "Create New Account" to register your company.`
-      };
-    }
-
-    if (!password || !password.trim()) {
-      return {
-        success: false,
-        message: 'Password is required to sign in to your customer account.'
-      };
-    }
-
-    // Verify password if set on customer account
-    if (matchedCustomer.password) {
-      if (matchedCustomer.password !== password) {
+      const acc = await linkAccount();
+      if (!acc) {
+        await supabase.auth.signOut();
         return {
           success: false,
-          message: 'Incorrect password. Please verify your password and try again.'
+          message: 'This email is not linked to any company yet. Ask Progressive Enterprises to add your email, or create a new account.',
         };
       }
-    } else {
-      // Legacy customer without a password: bind this password
-      matchedCustomer.password = password;
-      setCustomers(prev => prev.map(c => c.id === matchedCustomer.id ? { ...c, password } : c));
+      setSessionUserId(data.user.id);
+      setAccount(acc);
+      return acc;
+    } catch (e) {
+      await supabase.auth.signOut();
+      return { success: false, message: errorMessage(e) };
     }
-
-    setAuthenticatedEmail(cleanEmail);
-    setSelectedCustomerId(matchedCustomer.id);
-    setActiveRole('customer');
-    setIsFactoryAuthenticated(false);
-    try {
-      localStorage.setItem(STORAGE_KEY_AUTH_EMAIL, cleanEmail);
-      localStorage.setItem(STORAGE_KEY_ROLE, 'customer');
-      localStorage.removeItem(STORAGE_KEY_FACTORY_AUTH);
-    } catch {
-      // ignore
-    }
-    return {
-      success: true,
-      customer: matchedCustomer,
-      message: `Welcome back, ${matchedCustomer.companyName || matchedCustomer.name}!`
-    };
   };
 
-  // Customer Google Sign-In (seamless client access with mandatory company name for new accounts)
-  const loginCustomerWithGoogle = (
-    googleEmail: string,
-    googleName?: string,
-    companyName?: string
-  ) => {
-    const cleanEmail = googleEmail.trim().toLowerCase();
-    const matchedCustomer = customers.find(
-      (c) =>
-        c.authorizedEmails.some((ae) => ae.toLowerCase() === cleanEmail) ||
-        c.email.toLowerCase() === cleanEmail
-    );
-
-    if (matchedCustomer) {
-      setAuthenticatedEmail(cleanEmail);
-      setSelectedCustomerId(matchedCustomer.id);
-      setActiveRole('customer');
-      setIsFactoryAuthenticated(false);
-      try {
-        localStorage.setItem(STORAGE_KEY_AUTH_EMAIL, cleanEmail);
-        localStorage.setItem(STORAGE_KEY_ROLE, 'customer');
-        localStorage.removeItem(STORAGE_KEY_FACTORY_AUTH);
-      } catch {
-        // ignore
-      }
-      return {
-        success: true,
-        customer: matchedCustomer,
-        message: `Welcome back, ${matchedCustomer.companyName || matchedCustomer.name}! Signed in via Google.`,
-      };
-    }
-
-    // New Google Client: Company name is strictly compulsory
-    if (!companyName || !companyName.trim()) {
+  const loginFactory = async (email: string, pass: string): Promise<AuthResult> => {
+    const res = await signIn(email, pass);
+    if ('success' in res) return res;
+    if (res.role !== 'staff') {
+      await supabase!.auth.signOut();
       return {
         success: false,
-        requiresCompany: true,
-        message: 'Entering a Company Name is compulsory to complete your account registration.',
+        message: 'Access Denied: this is a customer account. Please use the Customer Portal tab to sign in.',
       };
     }
+    setActiveRole('factory');
+    return { success: true, message: 'Factory access authorized. Welcome to Progressive Enterprises Dashboard.' };
+  };
 
-    const newId = `CUST-${String(customers.length + 1).padStart(3, '0')}`;
-    const code = `${companyName.trim().substring(0, 3).toUpperCase()}-TRACK-2026`;
-    const newCust: Customer = {
-      id: newId,
-      name: companyName.trim(),
-      companyName: companyName.trim(),
-      email: cleanEmail,
-      authorizedEmails: [cleanEmail],
-      phone: '+91 98000 00000',
-      gstNumber: '',
-      registeredAddress: 'Registered Office',
-      plantAddress: 'Plant Works',
-      city: 'Pune',
-      state: 'Maharashtra',
-      stateCode: '27',
-      accessCode: code,
-    };
-
-    setCustomers((prev) => [...prev, newCust]);
-    setAuthenticatedEmail(cleanEmail);
-    setSelectedCustomerId(newId);
-    setActiveRole('customer');
-    setIsFactoryAuthenticated(false);
-    try {
-      localStorage.setItem(STORAGE_KEY_AUTH_EMAIL, cleanEmail);
-      localStorage.setItem(STORAGE_KEY_ROLE, 'customer');
-      localStorage.removeItem(STORAGE_KEY_FACTORY_AUTH);
-    } catch {
-      // ignore
+  const loginCustomerByEmail = async (email: string, password: string): Promise<AuthResult> => {
+    const res = await signIn(email, password);
+    if ('success' in res) return res;
+    if (res.role === 'staff') {
+      setActiveRole('factory');
+      return { success: true, message: 'Signed in with a factory account - opening the factory dashboard.' };
     }
-
-    return {
-      success: true,
-      customer: newCust,
-      message: `Account created successfully for ${companyName.trim()} via Google!`,
-    };
+    return { success: true, message: 'Welcome back!' };
   };
 
-  // Customer portal login by direct link or access code
-  const loginCustomerByAccessCode = (code: string) => {
-    const cleanCode = code.trim().toUpperCase();
-    const matchedCustomer = customers.find(
-      c => (c.accessCode && c.accessCode.toUpperCase() === cleanCode) || c.id.toUpperCase() === cleanCode
-    );
-
-    if (matchedCustomer) {
-      setAuthenticatedEmail(matchedCustomer.email);
-      setSelectedCustomerId(matchedCustomer.id);
-      return {
-        success: true,
-        customer: matchedCustomer,
-        message: `Access verified for ${matchedCustomer.companyName}.`
-      };
-    }
-
-    return {
-      success: false,
-      message: `Tracking code "${code}" not found. Please verify your tracking link.`
-    };
+  const sendPasswordReset = async (email: string): Promise<AuthResult> => {
+    if (!supabase) return { success: false, message: 'The database is not configured yet.' };
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: window.location.origin,
+    });
+    if (error) return { success: false, message: errorMessage(error) };
+    return { success: true, message: `If ${email.trim()} has an account, a password reset link has been emailed to it.` };
   };
 
-  const logoutCustomer = () => {
-    setAuthenticatedEmail(null);
+  const completePasswordReset = async (newPassword: string): Promise<AuthResult> => {
+    if (!supabase) return { success: false, message: 'The database is not configured yet.' };
+    if (newPassword.length < 6) return { success: false, message: 'Password must be at least 6 characters long.' };
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) return { success: false, message: errorMessage(error) };
+    setPasswordRecovery(false);
+    return { success: true, message: 'Your password has been changed.' };
   };
 
-  // Customer Management
-  const addCustomer: ProductionContextType['addCustomer'] = (customerData) => {
-    const newId = `CUST-${String(customers.length + 1).padStart(3, '0')}`;
-    const code = `${customerData.companyName.substring(0, 3).toUpperCase()}-TRACK-2026`;
-    const newCust: Customer = {
-      ...customerData,
-      id: newId,
-      accessCode: code,
-      authorizedEmails: customerData.authorizedEmails.length > 0
-        ? customerData.authorizedEmails
-        : [customerData.email],
-    };
-    setCustomers(prev => [...prev, newCust]);
-    return newCust;
+  const signOutEverywhere = () => {
+    setAccount(null);
+    setSessionUserId(null);
+    setSignedInEmail(null);
+    if (supabase) void supabase.auth.signOut();
   };
 
-  const registerCustomer: ProductionContextType['registerCustomer'] = (customerData) => {
-    // Entering a company name is strictly compulsory
+  const logoutFactory = signOutEverywhere;
+  const logoutAll = signOutEverywhere;
+  const logoutCustomer = signOutEverywhere;
+
+  // Customer self-registration. The company is created by the database on
+  // the first sign-in, after the email address has been confirmed.
+  const registerCustomer: ProductionContextType['registerCustomer'] = async (customerData) => {
+    if (!supabase) return { success: false, message: 'The database is not configured yet.' };
     if (!customerData.companyName || !customerData.companyName.trim()) {
-      return {
-        success: false,
-        message: 'Entering a Company Name is strictly compulsory to create an account.',
-        customer: null as any,
-      };
+      return { success: false, message: 'Entering a Company Name is strictly compulsory to create an account.' };
     }
-
-    // Creating a password is compulsory
     if (!customerData.password || customerData.password.trim().length < 6) {
-      return {
-        success: false,
-        message: 'Password is compulsory and must be at least 6 characters long.',
-        customer: null as any,
-      };
+      return { success: false, message: 'Password is compulsory and must be at least 6 characters long.' };
     }
 
     const cleanEmail = customerData.email.trim().toLowerCase();
-    const newId = `CUST-${String(customers.length + 1).padStart(3, '0')}`;
-    const code = `${customerData.companyName.trim().substring(0, 3).toUpperCase()}-TRACK-2026`;
-
-    // Check if company or email already exists
-    const existing = customers.find(
-      c => c.email.toLowerCase() === cleanEmail ||
-           c.authorizedEmails.some(e => e.toLowerCase() === cleanEmail) ||
-           c.companyName.toLowerCase().trim() === customerData.companyName.toLowerCase().trim()
-    );
-
-    if (existing) {
-      if (!existing.authorizedEmails.some(e => e.toLowerCase() === cleanEmail)) {
-        addAuthorizedEmail(existing.id, cleanEmail);
-      }
-      if (customerData.password) {
-        existing.password = customerData.password;
-      }
-      setSelectedCustomerId(existing.id);
-      setAuthenticatedEmail(cleanEmail);
-      setActiveRole('customer');
-      setIsFactoryAuthenticated(false);
-      try {
-        localStorage.setItem(STORAGE_KEY_AUTH_EMAIL, cleanEmail);
-        localStorage.setItem(STORAGE_KEY_ROLE, 'customer');
-        localStorage.removeItem(STORAGE_KEY_FACTORY_AUTH);
-      } catch {
-        // ignore
-      }
-      return {
-        success: true,
-        customer: existing,
-        message: `Welcome! You are registered and logged into ${existing.companyName}.`,
-      };
-    }
-
-    const authEmails = customerData.authorizedEmails && customerData.authorizedEmails.length > 0
-      ? Array.from(new Set([cleanEmail, ...customerData.authorizedEmails.map(e => e.toLowerCase().trim())]))
-      : [cleanEmail];
-
-    const newCust: Customer = {
-      ...customerData,
-      id: newId,
-      name: customerData.companyName.trim(),
-      companyName: customerData.companyName.trim(),
+    setSyncError(null);
+    const { data, error } = await supabase.auth.signUp({
       email: cleanEmail,
       password: customerData.password,
-      accessCode: code,
-      authorizedEmails: authEmails,
-      registeredAddress: customerData.registeredAddress || '',
-      plantAddress: customerData.plantAddress || '',
-    };
+      options: {
+        emailRedirectTo: window.location.origin,
+        data: {
+          companyName: customerData.companyName.trim(),
+          contactPerson: customerData.contactPerson || '',
+          phone: customerData.phone || '',
+          gstNumber: customerData.gstNumber || '',
+          registeredAddress: customerData.registeredAddress || '',
+          plantAddress: customerData.plantAddress || '',
+          city: customerData.city || '',
+          state: customerData.state || '',
+          stateCode: customerData.stateCode || '',
+        },
+      },
+    });
+    if (error) return { success: false, message: errorMessage(error) };
 
-    setCustomers(prev => [...prev, newCust]);
-    setSelectedCustomerId(newId);
-    setAuthenticatedEmail(cleanEmail);
-    setActiveRole('customer');
-    setIsFactoryAuthenticated(false);
-    try {
-      localStorage.setItem(STORAGE_KEY_AUTH_EMAIL, cleanEmail);
-      localStorage.setItem(STORAGE_KEY_ROLE, 'customer');
-      localStorage.removeItem(STORAGE_KEY_FACTORY_AUTH);
-    } catch {
-      // ignore
+    if (data.session) {
+      // Email confirmation is switched off in Supabase: signed in straight away.
+      try {
+        const acc = await linkAccount();
+        setSessionUserId(data.session.user.id);
+        setAccount(acc);
+        return { success: true, message: `Account created for ${customerData.companyName.trim()}!` };
+      } catch (e) {
+        return { success: false, message: errorMessage(e) };
+      }
     }
-
-    addNotification(
-      'sys-new-cust',
-      'NEW-ACCOUNT',
-      newId,
-      newCust.companyName,
-      'status_change',
-      `New Customer Onboarded: ${newCust.companyName}`,
-      `${newCust.companyName} created a new customer account. Contact: ${newCust.contactPerson || newCust.name} (${cleanEmail}).`
-    );
 
     return {
       success: true,
-      customer: newCust,
-      message: `Account created successfully for ${newCust.companyName}! You can now submit inward material and track delivery.`,
+      message: `Almost done! We've emailed a confirmation link to ${cleanEmail}. Click it, then sign in here with your email and password.`,
     };
+  };
+
+  // One-time copy of records saved in this browser by the old version.
+  const importLocalBrowserData = async (): Promise<AuthResult> => {
+    if (!supabase || account?.role !== 'staff') return { success: false, message: 'Only factory staff can import.' };
+    const legacy = readLegacyData();
+    if (!legacy) {
+      setLocalImport(null);
+      return { success: true, message: 'Nothing to import.' };
+    }
+    if (legacy.customers.length > 0) {
+      const { error } = await supabase.from('customers').upsert(
+        legacy.customers.map(c => ({ id: c.id, data: stripPassword(c) })),
+        { onConflict: 'id', ignoreDuplicates: true }
+      );
+      if (error) return { success: false, message: `Import failed (customers): ${errorMessage(error)}` };
+    }
+    if (legacy.jobs.length > 0) {
+      const { error } = await supabase.from('jobs').upsert(
+        legacy.jobs.map(j => ({ id: j.id, customer_id: j.customerId, data: j })),
+        { onConflict: 'id', ignoreDuplicates: true }
+      );
+      if (error) return { success: false, message: `Import failed (orders): ${errorMessage(error)}` };
+    }
+    const { error: seqError } = await supabase.rpc('sync_number_sequences');
+    if (seqError) console.error('Failed to update number counters', seqError);
+    try {
+      localStorage.setItem(LEGACY_KEY_IMPORT_DONE, new Date().toISOString());
+    } catch {
+      // ignore
+    }
+    setLocalImport(null);
+    // Reload everything from the database.
+    const [jobsRes, customersRes] = await Promise.all([
+      supabase.from('jobs').select('id, data, updated_at').order('created_at', { ascending: false }),
+      supabase.from('customers').select('id, data, updated_at').order('created_at', { ascending: true }),
+    ]);
+    jobsSync.reset();
+    customersSync.reset();
+    setJobs(jobsSync.seed((jobsRes.data || []) as SyncedRow<MaterialInward>[]));
+    setCustomers(customersSync.seed((customersRes.data || []) as SyncedRow<Customer>[]));
+    return {
+      success: true,
+      message: `Imported ${legacy.jobs.length} orders and ${legacy.customers.length} customers into the database.`,
+    };
+  };
+
+  const dismissLocalImport = () => {
+    try {
+      localStorage.setItem(LEGACY_KEY_IMPORT_DONE, 'dismissed');
+    } catch {
+      // ignore
+    }
+    setLocalImport(null);
+  };
+
+  // Customer Management (factory staff)
+  const addCustomer: ProductionContextType['addCustomer'] = (customerData) => {
+    const maxNo = customers.reduce((max, c) => {
+      const m = c.id.match(/(\d+)$/);
+      return m ? Math.max(max, Number(m[1])) : max;
+    }, 0);
+    const newId = `CUST-${String(maxNo + 1).padStart(3, '0')}`;
+    const code = `${customerData.companyName.substring(0, 3).toUpperCase()}-TRACK-2026`;
+    const newCust: Customer = {
+      ...stripPassword(customerData as Customer),
+      id: newId,
+      accessCode: code,
+      authorizedEmails: customerData.authorizedEmails.length > 0
+        ? customerData.authorizedEmails.map(e => e.trim().toLowerCase())
+        : [customerData.email.trim().toLowerCase()],
+    };
+    setCustomers(prev => [...prev, newCust]);
+    return newCust;
   };
 
   const updateCustomer = (customerId: string, customerData: Partial<Customer>) => {
@@ -875,9 +835,9 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       currentCustomer ||
       customers[0];
 
-    const nextNumber = 85 + jobs.length + 1;
-    const jobNo = `PE-JOB-2026-${String(nextNumber).padStart(3, '0')}`;
-    const id = 'job-' + Date.now();
+    // The database replaces this with the next real job number when it saves the order.
+    const jobNo = 'PENDING';
+    const id = 'job-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
     const nowIso = new Date().toISOString();
     const cleanVehicleNo = (data.vehicleNo && data.vehicleNo.trim()) ? data.vehicleNo.trim().toUpperCase() : '—';
 
@@ -928,22 +888,8 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       updatedAt: nowIso,
     };
 
+    // The "New Inward" notification is created by the database together with the job number.
     setJobs(prev => [newJob, ...prev]);
-
-    // Factory Notification
-    addNotification(
-      id,
-      jobNo,
-      customer.id,
-      customer.companyName,
-      'new_material_inward',
-      `New Inward (PO: ${newJob.customerPoNo}): ${newJob.grade}`,
-      `${customer.companyName} delivered ${newJob.incomingWeight.toLocaleString()} kg via ${newJob.vehicleNo}. ${
-        data.estimatedDeliveryDate
-          ? `EDD promised for ${data.estimatedDeliveryDate}.`
-          : 'Pending factory estimated delivery date assignment.'
-      }`
-    );
 
     return newJob;
   };
@@ -1076,7 +1022,14 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const sequenceNumber = existingChallansCount + 1;
     
     // Challan number formatting: e.g. PE/DC/2026/0415-P1 or PE/DC/2026/0415
-    const baseChallanNum = 415 + jobs.reduce((acc, j) => acc + (j.challans?.length || 0), 0) + 1;
+    // Continues from the highest number already issued, so deleted challans never cause duplicates.
+    const highestChallanNum = jobs.reduce((max, j) => {
+      return (j.challans || []).reduce((m, c) => {
+        const match = c.challanNo.match(/^PE\/DC\/\d{4}\/0*(\d+)/);
+        return match ? Math.max(m, Number(match[1])) : m;
+      }, max);
+    }, 415);
+    const baseChallanNum = highestChallanNum + 1;
     const challanNo = params.dispatchType === 'partial'
       ? `PE/DC/2026/0${baseChallanNum}-P${sequenceNumber}`
       : `PE/DC/2026/0${baseChallanNum}`;
@@ -2002,26 +1955,16 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       status: 'pending_approval',
     };
 
-    setJobs(prev =>
-      prev.map(j => {
-        if (j.id !== jobId) return j;
-        return {
-          ...j,
-          specChangeRequests: [...(j.specChangeRequests || []), newRequest],
-          updatedAt: nowIso,
-        };
-      })
-    );
-
-    addNotification(
-      job.id,
-      job.jobNo,
-      job.customerId,
-      job.customerName,
-      'spec_change_requested',
-      `Spec Change Requested: PO ${job.customerPoNo}`,
-      `Customer requested spec amendment (${data.reason}). Awaiting factory review.`
-    );
+    // Saved by a database function, which only lets customers add a pending
+    // request and also creates the factory notification.
+    if (!supabase) return;
+    void supabase.rpc('request_spec_change', { p_job_id: jobId, p_request: newRequest }).then(({ error }) => {
+      if (error) {
+        reportSyncError(`Could not send the change request: ${errorMessage(error)}`);
+        return;
+      }
+      void jobsSync.refresh(jobId);
+    });
   };
 
   const approveSpecChange = (jobId: string, requestId: string, reviewNote: string, reviewedBy?: string) => {
@@ -2112,29 +2055,31 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     );
   };
 
+  // Read status is shared by the factory team. Customers only mark them on
+  // their own screen (the database does not let them change notifications).
+  const saveNotificationsRead = (toSave: AppNotification[]) => {
+    if (!supabase || accountRef.current?.role !== 'staff') return;
+    for (const n of toSave) {
+      void supabase
+        .from('notifications')
+        .update({ data: { ...n, read: true } })
+        .eq('id', n.id)
+        .then(({ error }) => {
+          if (error) console.error('Failed to save notification status', error);
+        });
+    }
+  };
+
   const markNotificationRead = (id: string) => {
+    saveNotificationsRead(notifications.filter(n => n.id === id && !n.read));
     setNotifications(prev =>
       prev.map(n => (n.id === id ? { ...n, read: true } : n))
     );
   };
 
   const markAllNotificationsRead = () => {
+    saveNotificationsRead(notifications.filter(n => !n.read));
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
-
-  const resetToSampleData = () => {
-    setJobs(INITIAL_JOBS);
-    setCustomers(INITIAL_CUSTOMERS);
-    setNotifications(INITIAL_NOTIFICATIONS);
-    setFactoryUsers(INITIAL_FACTORY_USERS);
-    setActiveFactoryUserId(INITIAL_FACTORY_USERS[0].id);
-    setAuthenticatedEmail(null);
-    localStorage.removeItem(STORAGE_KEY_JOBS);
-    localStorage.removeItem(STORAGE_KEY_CUSTOMERS);
-    localStorage.removeItem(STORAGE_KEY_NOTIFS);
-    localStorage.removeItem(STORAGE_KEY_AUTH_EMAIL);
-    localStorage.removeItem(STORAGE_KEY_FACTORY_USERS);
-    localStorage.removeItem(STORAGE_KEY_ACTIVE_FACTORY_USER);
   };
 
   const getJobById = (id: string) => {
@@ -2151,6 +2096,14 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setActiveRole,
         selectedCustomerId,
         setSelectedCustomerId,
+        authLoading,
+        dataLoading,
+        signedInEmail,
+        syncError,
+        clearSyncError,
+        localImport,
+        importLocalBrowserData,
+        dismissLocalImport,
         isFactoryAuthenticated,
         loginFactory,
         logoutFactory,
@@ -2164,8 +2117,9 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         authenticatedEmail,
         currentCustomer,
         loginCustomerByEmail,
-        loginCustomerWithGoogle,
-        loginCustomerByAccessCode,
+        sendPasswordReset,
+        passwordRecovery,
+        completePasswordReset,
         logoutCustomer,
         logoutAll,
         addCustomer,
@@ -2198,7 +2152,6 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         reopenCustomerPo,
         markNotificationRead,
         markAllNotificationsRead,
-        resetToSampleData,
         getJobById,
       }}
     >
