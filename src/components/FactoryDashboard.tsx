@@ -459,7 +459,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
           <table className="w-full text-left text-xs divide-y divide-slate-200">
             <thead className="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
               <tr>
-                <th className="py-3 px-4">Job & PO #</th>
+                <th className="py-3 px-4">PO # & Job</th>
                 <th className="py-3 px-4">Customer</th>
                 <th className="py-3 px-4">Raw Material</th>
                 <th className="py-3 px-4">Live Stage & Dispatches</th>
@@ -512,11 +512,14 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                                 <ChevronDown className="w-3.5 h-3.5" />
                               )}
                             </button>
-                            <span className="font-mono font-bold text-slate-900">{job.jobNo}</span>
+                            {/* The customer PO is the main reference for every order */}
+                            <span className="font-mono font-bold text-blue-800 text-[13px]">
+                              {job.customerPoNo || 'Assigning…'}
+                            </span>
                           </div>
-                          
-                          <div className="text-[11px] font-mono text-blue-700 font-bold mt-1">
-                            PO #{job.customerPoNo || '…'}
+
+                          <div className="text-[10px] font-mono text-slate-500 mt-1 pl-5">
+                            {job.jobNo === 'PENDING' ? 'Job no. assigning…' : job.jobNo}
                           </div>
 
                           {isPermanentlyClosed ? (

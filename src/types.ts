@@ -46,7 +46,14 @@ export interface SlitCut {
   remarks?: string;
 }
 
-export type CoreType = 'paper_core' | 'pvc_core' | 'none';
+// A slit width the customer wants and how much of it, in kg (50 g least count).
+export interface RequestedSlitSize {
+  id: string;
+  widthMm: number;
+  quantityKg: number;
+}
+
+export type CoreType ='paper_core' | 'pvc_core' | 'none';
 
 export interface BundleRollItem {
   widthMm: number;
@@ -281,7 +288,7 @@ export interface MaterialInward {
   bundleSpecs: BundleSpecifications;
   
   customerInstructions: string; // special customer instructions (e.g., slit to 20mm, bundles 25-30kg max, 10 reels/20 reams per bundle)
-  requestedSlitCuts?: SlitCut[]; // slit widths the customer asked for at inward entry
+  requestedSlitSizes?: RequestedSlitSize[]; // slit widths and kg the customer asked for at inward entry
 
   // Production Tracking
   status: ProductionStatus;

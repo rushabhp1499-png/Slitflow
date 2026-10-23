@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useProduction } from '../context/ProductionContext';
-import { MaterialInward, SlitCut } from '../types';
+import { MaterialInward, RequestedSlitSize } from '../types';
 import {
   PackagePlus,
   X,
@@ -23,14 +23,19 @@ interface InwardEntryModalProps {
 interface SlitRow {
   id: string;
   widthMm: string;
-  numberOfCuts: string;
+  quantityKg: string;
 }
 
 const newSlitRow = (): SlitRow => ({
-  id: 'cut-' + Math.random().toString(36).substring(2, 8),
+  id: 'size-' + Math.random().toString(36).substring(2, 8),
   widthMm: '',
-  numberOfCuts: '1',
+  quantityKg: '',
 });
+
+// The factory scale's least count is 50 g, so weights are kept in 0.05 kg steps.
+const toScaleKg = (kg: number) => Math.round(kg * 20) / 20;
+const formatKg = (kg: number) =>
+  kg.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
   onClose,
@@ -103,19 +108,20 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
 
   const [formError, setFormError] = useState<string>('');
 
-  const updateSlitRow = (id: string, field: 'widthMm' | 'numberOfCuts', value: string) => {
+  const updateSlitRow = (id: string, field: 'widthMm' | 'quantityKg', value: string) => {
     setSlitRows((rows) => rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   };
 
-  const validCuts: SlitCut[] = slitRows
-    .filter((r) => Number(r.widthMm) > 0 && Number(r.numberOfCuts) > 0)
-    .map((r) => ({ id: r.id, widthMm: Number(r.widthMm), numberOfCuts: Math.round(Number(r.numberOfCuts)) }));
+  const validSizes: RequestedSlitSize[] = slitRows
+    .filter((r) => Number(r.widthMm) > 0 && toScaleKg(Number(r.quantityKg)) > 0)
+    .map((r) => ({ id: r.id, widthMm: Number(r.widthMm), quantityKg: toScaleKg(Number(r.quantityKg)) }));
 
   const widthNum = Number(incomingWidth) || 0;
-  const usedWidth = validCuts.reduce((sum, c) => sum + c.widthMm * c.numberOfCuts, 0);
-  const trimWidth = widthNum - usedWidth;
+  const weightNum = toScaleKg(Number(incomingWeight) || 0);
+  const totalSlitKg = toScaleKg(validSizes.reduce((sum, s) => sum + s.quantityKg, 0));
+  const balanceKg = toScaleKg(weightNum - totalSlitKg);
 
-  const slitSummary = validCuts.map((c) => `${c.numberOfCuts} × ${c.widthMm} mm`).join(', ');
+  const slitSummary = validSizes.map((s) => `${s.widthMm} mm – ${formatKg(s.quantityKg)} kg`).join(', ');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,18 +145,18 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
       }
     }
 
-    if (validCuts.length === 0) {
-      setFormError('Add at least one slitting size (width in mm and number of strips).');
+    if (validSizes.length === 0) {
+      setFormError('Add at least one slitting size (width in mm and quantity in kg).');
       return;
     }
-    if (widthNum > 0 && usedWidth > widthNum) {
-      setFormError(`The slitting sizes add up to ${usedWidth} mm, which is more than the incoming width of ${widthNum} mm.`);
+    if (weightNum > 0 && totalSlitKg > weightNum) {
+      setFormError(`The slitting quantities add up to ${formatKg(totalSlitKg)} kg, which is more than the incoming weight of ${formatKg(weightNum)} kg.`);
       return;
     }
 
     const instructions = [
       `Slit sizes: ${slitSummary}.`,
-      widthNum > 0 ? `Edge trim: ${Math.max(0, trimWidth)} mm.` : '',
+      balanceKg > 0 ? `Balance ${formatKg(balanceKg)} kg not assigned to a size.` : '',
       extraInstructions.trim(),
     ]
       .filter(Boolean)
@@ -168,12 +174,12 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
       thicknessUnit,
       incomingWidth: widthNum,
       incomingLength: Number(incomingLength) || 0,
-      incomingWeight: Number(incomingWeight),
+      incomingWeight: weightNum,
       coilsOrRollsCount: Number(coilsOrRollsCount) || 1,
-      requestedSlitCuts: validCuts,
+      requestedSlitSizes: validSizes,
       customerInstructions: instructions,
       bundleSpecs: {
-        targetBundleWeightKg: Number(targetBundleWeightKg) || 28,
+        targetBundleWeightKg: toScaleKg(Number(targetBundleWeightKg)) || 28,
         unitsPerBundle: Number(unitsPerBundle) || 10,
         unitType,
         packagingStyle: bundleMaxNotes.trim(),
@@ -255,7 +261,9 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
                   placeholder="Your PO number"
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono font-bold text-blue-900 focus:bg-white"
                 />
-                <p className="text-[10px] text-slate-500 mt-1">Leave blank to get the next number automatically.</p>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  No PO? Leave blank and the next PE-PO number is assigned automatically.
+                </p>
               </div>
 
               <div>
@@ -355,11 +363,15 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
                 </label>
                 <input
                   type="number"
-                  step="any"
+                  step={0.05}
                   required
-                  min={0.1}
+                  min={0.05}
                   value={incomingWeight}
                   onChange={(e) => setIncomingWeight(e.target.value)}
+                  onBlur={(e) => {
+                    const kg = Number(e.target.value);
+                    if (kg > 0) setIncomingWeight(toScaleKg(kg).toFixed(2));
+                  }}
                   className={`${inputClass} font-bold text-blue-900`}
                 />
               </div>
@@ -400,13 +412,13 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
               3. Slitting Sizes Required
             </h4>
             <p className="text-[11px] text-slate-500 mb-3">
-              Add each width you need and how many strips of that width to cut across the roll.
+              Add each width you need and how many kg of that width (in steps of 50 g).
             </p>
 
             <div className="space-y-2">
               <div className="grid grid-cols-[1fr_1fr_auto] gap-2 text-[11px] font-semibold text-slate-600 px-0.5">
                 <span>Slit width (mm)</span>
-                <span>No. of strips</span>
+                <span>Quantity (kg)</span>
                 <span className="w-8" />
               </div>
               {slitRows.map((row) => (
@@ -422,10 +434,15 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
                   />
                   <input
                     type="number"
-                    min={1}
-                    step={1}
-                    value={row.numberOfCuts}
-                    onChange={(e) => updateSlitRow(row.id, 'numberOfCuts', e.target.value)}
+                    min={0.05}
+                    step={0.05}
+                    value={row.quantityKg}
+                    onChange={(e) => updateSlitRow(row.id, 'quantityKg', e.target.value)}
+                    onBlur={(e) => {
+                      const kg = Number(e.target.value);
+                      if (kg > 0) updateSlitRow(row.id, 'quantityKg', toScaleKg(kg).toFixed(2));
+                    }}
+                    placeholder="e.g. 500"
                     className={`${inputClass} font-bold`}
                   />
                   <button
@@ -448,19 +465,23 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
               </button>
             </div>
 
-            {validCuts.length > 0 && (
+            {validSizes.length > 0 && (
               <div
                 className={`mt-3 rounded-lg border px-3 py-2 text-xs ${
-                  widthNum > 0 && usedWidth > widthNum
+                  weightNum > 0 && totalSlitKg > weightNum
                     ? 'bg-red-50 border-red-200 text-red-900'
                     : 'bg-blue-50 border-blue-200 text-blue-950'
                 }`}
               >
-                <span className="font-bold">{slitSummary}</span>
-                {widthNum > 0 && (
+                <span className="font-bold">Total {formatKg(totalSlitKg)} kg</span>
+                {weightNum > 0 && (
                   <span>
-                    {' '}= {usedWidth} mm of {widthNum} mm
-                    {usedWidth <= widthNum ? ` • edge trim ${trimWidth} mm` : ' • exceeds the roll width'}
+                    {' '}of {formatKg(weightNum)} kg received
+                    {totalSlitKg > weightNum
+                      ? ' • more than the material received'
+                      : balanceKg > 0
+                      ? ` • ${formatKg(balanceKg)} kg not yet assigned`
+                      : ' • fully assigned'}
                   </span>
                 )}
               </div>
@@ -494,11 +515,15 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
                 <div className="relative">
                   <input
                     type="number"
-                    min={1}
+                    min={0.05}
                     max={500}
-                    step="any"
+                    step={0.05}
                     value={targetBundleWeightKg}
                     onChange={(e) => setTargetBundleWeightKg(e.target.value)}
+                    onBlur={(e) => {
+                      const kg = Number(e.target.value);
+                      if (kg > 0) setTargetBundleWeightKg(toScaleKg(kg).toFixed(2));
+                    }}
                     className="w-full px-3 py-2 bg-white border border-purple-300 rounded-lg text-xs font-bold text-purple-950"
                   />
                   <span className="absolute right-3 top-2 text-xs text-purple-700 font-semibold">kg max</span>

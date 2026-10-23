@@ -14,7 +14,7 @@ import {
   BundleEditRecord,
   SpecChangeRequest,
   FactoryUser,
-  SlitCut
+  RequestedSlitSize
 } from '../types';
 import {
   INITIAL_JOBS,
@@ -130,7 +130,7 @@ interface ProductionContextType {
     coilsOrRollsCount: number;
     bundleSpecs: BundleSpecifications;
     customerInstructions: string;
-    requestedSlitCuts?: SlitCut[];
+    requestedSlitSizes?: RequestedSlitSize[];
     assignedMachine?: string;
     estimatedDeliveryDate?: string;
   }) => MaterialInward | null;
@@ -892,7 +892,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       coilsOrRollsCount: Number(data.coilsOrRollsCount) || 1,
       bundleSpecs: data.bundleSpecs,
       customerInstructions: data.customerInstructions || 'Standard precision slitting and bundle packaging.',
-      requestedSlitCuts: data.requestedSlitCuts,
+      requestedSlitSizes: data.requestedSlitSizes,
       status: data.estimatedDeliveryDate ? 'pending_production' : 'received',
       assignedMachine: data.assignedMachine || 'Slitter Line #1',
       estimatedDeliveryDate: data.estimatedDeliveryDate,
