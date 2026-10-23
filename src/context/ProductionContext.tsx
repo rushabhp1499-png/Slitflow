@@ -336,13 +336,29 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   ).current;
 
   // Asks the database which role this login has (creating the customer
-  // company on the first sign-in after registration).
-  const linkAccount = async (): Promise<Account | null> => {
-    const { data, error } = await getSupabase().rpc('link_my_account');
-    if (error) throw error;
-    const row = Array.isArray(data) ? data[0] : data;
-    if (!row) return null;
-    return { role: row.account_role, customerId: row.account_customer_id };
+  // company on the first sign-in after registration). Sign-in and the session
+  // listener both ask at the same moment, so they share one request.
+  const linkRequestRef = useRef<{ userId: string; promise: Promise<Account | null> } | null>(null);
+  const linkAccount = (userId: string): Promise<Account | null> => {
+    if (linkRequestRef.current?.userId === userId) return linkRequestRef.current.promise;
+    const promise = (async () => {
+      const { data, error } = await getSupabase().rpc('link_my_account');
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) return null;
+      return { role: row.account_role, customerId: row.account_customer_id } as Account;
+    })();
+    linkRequestRef.current = { userId, promise };
+    // Ask again next time if this attempt failed or found no company.
+    promise.then(
+      acc => {
+        if (!acc && linkRequestRef.current?.promise === promise) linkRequestRef.current = null;
+      },
+      () => {
+        if (linkRequestRef.current?.promise === promise) linkRequestRef.current = null;
+      }
+    );
+    return promise;
   };
 
   // Follow the Supabase session (restored on page load, sign-in, sign-out).
@@ -365,13 +381,14 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   useEffect(() => {
     if (!supabase) return;
     if (!sessionUserId) {
+      linkRequestRef.current = null;
       setAccount(null);
       setAuthLoading(false);
       return;
     }
     let cancelled = false;
     setAuthLoading(true);
-    linkAccount()
+    linkAccount(sessionUserId)
       .then(acc => {
         if (cancelled) return;
         if (!acc) {
@@ -587,7 +604,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       return { success: false, message: msg };
     }
     try {
-      const acc = await linkAccount();
+      const acc = await linkAccount(data.user.id);
       if (!acc) {
         await supabase.auth.signOut();
         return {
@@ -647,6 +664,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   };
 
   const signOutEverywhere = () => {
+    linkRequestRef.current = null;
     setAccount(null);
     setSessionUserId(null);
     setSignedInEmail(null);
@@ -693,7 +711,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (data.session) {
       // Email confirmation is switched off in Supabase: signed in straight away.
       try {
-        const acc = await linkAccount();
+        const acc = await linkAccount(data.session.user.id);
         setSessionUserId(data.session.user.id);
         setAccount(acc);
         return { success: true, message: `Account created for ${customerData.companyName.trim()}!` };

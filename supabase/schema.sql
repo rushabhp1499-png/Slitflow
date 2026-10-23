@@ -230,6 +230,10 @@ begin
     raise exception 'Not signed in';
   end if;
 
+  -- If the app asks twice at the same moment, the second call waits here and
+  -- then finds the profile the first call created (no duplicate company).
+  perform pg_advisory_xact_lock(hashtext('link_my_account:' || uid::text));
+
   select * into u from auth.users where id = uid;
   em := lower(u.email);
 
