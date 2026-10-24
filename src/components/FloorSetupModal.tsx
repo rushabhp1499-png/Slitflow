@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useProduction } from '../context/ProductionContext';
 import { FloorStaff, Machine } from '../types';
 import { X, Cog, Users, Plus, AlertCircle, Pencil, Check } from 'lucide-react';
+import { parseStaffList } from '../utils/staffList';
 
 interface FloorSetupModalProps {
   onClose: () => void;
@@ -27,6 +28,23 @@ export const FloorSetupModal: React.FC<FloorSetupModalProps> = ({ onClose }) => 
   // Staff form (new or editing)
   const [staffForm, setStaffForm] = useState<Partial<FloorStaff>>({ name: '', role: 'operator', phone: '', active: true });
   const [error, setError] = useState('');
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState('');
+  const [pasteResult, setPasteResult] = useState('');
+
+  const pasted = parseStaffList(pasteText);
+  const existingNames = new Set(floorStaff.map((s) => s.name.trim().toLowerCase()));
+  const newPeople = pasted.filter(
+    (p, i) => !existingNames.has(p.name.toLowerCase()) && pasted.findIndex((q) => q.name.toLowerCase() === p.name.toLowerCase()) === i
+  );
+
+  const addPasted = () => {
+    newPeople.forEach((p) => saveFloorStaff({ ...p, active: true }));
+    const skipped = pasted.length - newPeople.length;
+    setPasteResult(`Added ${newPeople.length} people.${skipped ? ` Skipped ${skipped} already in the list.` : ''}`);
+    setPasteText('');
+    setPasteOpen(false);
+  };
 
   const submitMachine = (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,6 +178,65 @@ export const FloorSetupModal: React.FC<FloorSetupModalProps> = ({ onClose }) => 
                 </>
               ) : (
                 <>
+                  {/* Bulk add: paste rows straight from Excel */}
+                  <div className="border border-emerald-200 bg-emerald-50/60 rounded-xl p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-emerald-900">Add many at once from Excel</span>
+                      <button
+                        type="button"
+                        onClick={() => setPasteOpen((o) => !o)}
+                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold"
+                      >
+                        {pasteOpen ? 'Close' : 'Paste list'}
+                      </button>
+                    </div>
+                    {pasteResult && !pasteOpen && <p className="text-xs text-emerald-800">{pasteResult}</p>}
+                    {pasteOpen && (
+                      <>
+                        <p className="text-[11px] text-emerald-900">
+                          In Excel, select the columns <b>Name</b>, <b>Role</b> and <b>Phone</b> (in that order) for all
+                          rows, copy (Ctrl + C), and paste below (Ctrl + V). Role can be Operator, Helper or Supervisor;
+                          blank means Operator. Phone is optional.
+                        </p>
+                        <textarea
+                          rows={6}
+                          value={pasteText}
+                          onChange={(e) => setPasteText(e.target.value)}
+                          placeholder={'Ramesh Patil\tOperator\t9800000000\nAkash\tHelper'}
+                          className="w-full px-2.5 py-2 bg-white border border-emerald-300 rounded-lg text-xs font-mono"
+                        />
+                        {pasted.length > 0 && (
+                          <div className="max-h-40 overflow-y-auto border border-emerald-200 rounded-lg bg-white divide-y divide-slate-100">
+                            {pasted.map((p, i) => {
+                              const dup = !newPeople.includes(p);
+                              return (
+                                <div key={i} className={`flex gap-3 px-2.5 py-1 text-xs ${dup ? 'opacity-40 line-through' : ''}`}>
+                                  <span className="flex-1 font-semibold">{p.name}</span>
+                                  <span className="w-20">{ROLE_LABELS[p.role]}</span>
+                                  <span className="w-28 font-mono">{p.phone || '—'}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] text-emerald-900">
+                            {newPeople.length} to add
+                            {pasted.length > newPeople.length ? ` • ${pasted.length - newPeople.length} already in the list (crossed out)` : ''}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={newPeople.length === 0}
+                            onClick={addPasted}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white rounded-lg text-xs font-bold"
+                          >
+                            Add {newPeople.length} people
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
                   <form onSubmit={submitStaff} className="grid grid-cols-2 sm:grid-cols-[1fr_130px_1fr_auto] gap-2 items-end bg-slate-50 p-3 rounded-xl border border-slate-200">
                     <div className="col-span-2 sm:col-span-1">
                       <label className="block text-[11px] font-semibold text-slate-600 mb-1">Name *</label>
