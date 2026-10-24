@@ -14,7 +14,10 @@ import {
   BundleEditRecord,
   SpecChangeRequest,
   FactoryUser,
-  RequestedSlitSize
+  RequestedSlitSize,
+  Machine,
+  FloorStaff,
+  JobAssignment
 } from '../types';
 import {
   INITIAL_JOBS,
@@ -83,6 +86,14 @@ interface ProductionContextType {
   localImport: LocalImportSummary | null;
   importLocalBrowserData: () => Promise<AuthResult>;
   dismissLocalImport: () => void;
+
+  // Factory floor: machines, floor staff and per-order assignment (factory logins only)
+  machines: Machine[];
+  floorStaff: FloorStaff[];
+  floorSetupMissing: boolean; // true until the machines/floor_staff tables exist in the database
+  saveMachine: (machine: Omit<Machine, 'id'> & { id?: string }) => void;
+  saveFloorStaff: (person: Omit<FloorStaff, 'id'> & { id?: string }) => void;
+  assignJob: (jobId: string, assignment: Omit<JobAssignment, 'assignedAt' | 'assignedBy'> | null) => void;
 
   // Factory staff authentication (emails listed in the staff_emails table)
   isFactoryAuthenticated: boolean;
@@ -259,7 +270,7 @@ const readLegacyData = (): { jobs: MaterialInward[]; customers: Customer[] } | n
   }
 };
 
-const ProductionContext = createContext<ProductionContextType | undefined>(undefined);
+export const ProductionContext = createContext<ProductionContextType | undefined>(undefined);
 
 export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // ---------------------------------------------------------------------
@@ -285,6 +296,9 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [jobs, setJobs] = useState<MaterialInward[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [machines, setMachines] = useState<Machine[]>([]);
+  const [floorStaff, setFloorStaff] = useState<FloorStaff[]>([]);
+  const [floorSetupMissing, setFloorSetupMissing] = useState(false);
 
   // Factory staff badges are not stored in the database yet; kept in memory.
   const [factoryUsers, setFactoryUsers] = useState<FactoryUser[]>(INITIAL_FACTORY_USERS);
@@ -313,6 +327,34 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   customersRef.current = customers;
   const accountRef = useRef(account);
   accountRef.current = account;
+  const machinesRef = useRef(machines);
+  machinesRef.current = machines;
+  const floorStaffRef = useRef(floorStaff);
+  floorStaffRef.current = floorStaff;
+
+  const isStaffNow = () => accountRef.current?.role === 'staff';
+  const machinesSync = useRef(
+    new TableSync<Machine>({
+      table: 'machines',
+      toColumns: () => ({}),
+      getLocal: () => machinesRef.current,
+      setLocal: updater => setMachines(updater),
+      canInsert: isStaffNow,
+      canUpdate: isStaffNow,
+      onError: reportSyncError,
+    })
+  ).current;
+  const floorStaffSync = useRef(
+    new TableSync<FloorStaff>({
+      table: 'floor_staff',
+      toColumns: () => ({}),
+      getLocal: () => floorStaffRef.current,
+      setLocal: updater => setFloorStaff(updater),
+      canInsert: isStaffNow,
+      canUpdate: isStaffNow,
+      onError: reportSyncError,
+    })
+  ).current;
 
   const jobsSync = useRef(
     new TableSync<MaterialInward>({
@@ -422,10 +464,14 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     if (!supabase) return;
     jobsSync.reset();
     customersSync.reset();
+    machinesSync.reset();
+    floorStaffSync.reset();
     if (!account) {
       setJobs([]);
       setCustomers([]);
       setNotifications([]);
+      setMachines([]);
+      setFloorStaff([]);
       setLocalImport(null);
       return;
     }
@@ -456,6 +502,23 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       if (account.role === 'staff') {
         const legacy = readLegacyData();
         setLocalImport(legacy ? { jobs: legacy.jobs.length, customers: legacy.customers.length } : null);
+
+        // Machines and floor staff. These tables are added by section 7 of schema.sql;
+        // until that has been run, carry on without them.
+        const [machinesRes, staffRes] = await Promise.all([
+          sb.from('machines').select('id, data, updated_at').order('created_at', { ascending: true }),
+          sb.from('floor_staff').select('id, data, updated_at').order('created_at', { ascending: true }),
+        ]);
+        if (cancelled) return;
+        const missing = [machinesRes.error, staffRes.error].some(
+          e => e && (e.code === 'PGRST205' || /could not find the table/i.test(e.message))
+        );
+        setFloorSetupMissing(missing);
+        if (!missing && (machinesRes.error || staffRes.error)) {
+          reportSyncError(`Could not load machines / floor staff: ${errorMessage(machinesRes.error || staffRes.error)}`);
+        }
+        setMachines(machinesSync.seed((machinesRes.data || []) as SyncedRow<Machine>[]));
+        setFloorStaff(floorStaffSync.seed((staffRes.data || []) as SyncedRow<FloorStaff>[]));
       }
       setDataLoading(false);
     };
@@ -470,6 +533,14 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, payload => {
         const id = ((payload.new as { id?: string }) || {}).id || ((payload.old as { id?: string }) || {}).id;
         if (id) customersSync.receiveRemote(id);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'machines' }, payload => {
+        const id = ((payload.new as { id?: string }) || {}).id || ((payload.old as { id?: string }) || {}).id;
+        if (id) machinesSync.receiveRemote(id);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'floor_staff' }, payload => {
+        const id = ((payload.new as { id?: string }) || {}).id || ((payload.old as { id?: string }) || {}).id;
+        if (id) floorStaffSync.receiveRemote(id);
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, payload => {
         const row = payload.new as { id?: string; data?: AppNotification };
@@ -499,6 +570,42 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   useEffect(() => {
     if (account && !dataLoading) customersSync.syncAll();
   }, [customers, account, dataLoading]);
+
+  useEffect(() => {
+    if (account?.role === 'staff' && !dataLoading && !floorSetupMissing) machinesSync.syncAll();
+  }, [machines, account, dataLoading, floorSetupMissing]);
+
+  useEffect(() => {
+    if (account?.role === 'staff' && !dataLoading && !floorSetupMissing) floorStaffSync.syncAll();
+  }, [floorStaff, account, dataLoading, floorSetupMissing]);
+
+  // Add a new record (no id) or replace the one with the same id.
+  const upsertById = <T extends { id: string }>(item: T) => (prev: T[]) =>
+    prev.some(x => x.id === item.id) ? prev.map(x => (x.id === item.id ? item : x)) : [...prev, item];
+  const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+
+  const saveMachine: ProductionContextType['saveMachine'] = (machine) => {
+    setMachines(upsertById<Machine>({ ...machine, id: machine.id || newId('mc') }));
+  };
+
+  const saveFloorStaff: ProductionContextType['saveFloorStaff'] = (person) => {
+    setFloorStaff(upsertById<FloorStaff>({ ...person, id: person.id || newId('st') }));
+  };
+
+  const assignJob: ProductionContextType['assignJob'] = (jobId, assignment) => {
+    const nowIso = new Date().toISOString();
+    setJobs(prev =>
+      prev.map(j =>
+        j.id !== jobId
+          ? j
+          : {
+              ...j,
+              assignment: assignment ? { ...assignment, assignedAt: nowIso, assignedBy: actorName } : undefined,
+              updatedAt: nowIso,
+            }
+      )
+    );
+  };
 
   const activeFactoryUser = factoryUsers.find(u => u.id === activeFactoryUserId) || null;
 
@@ -2138,6 +2245,12 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         localImport,
         importLocalBrowserData,
         dismissLocalImport,
+        machines,
+        floorStaff,
+        floorSetupMissing,
+        saveMachine,
+        saveFloorStaff,
+        assignJob,
         isFactoryAuthenticated,
         loginFactory,
         logoutFactory,

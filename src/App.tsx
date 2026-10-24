@@ -15,6 +15,9 @@ import { NotificationsDrawer } from './components/NotificationsDrawer';
 import { CustomerManagementModal } from './components/CustomerManagementModal';
 import { PoCloseModal } from './components/PoCloseModal';
 import { SpecChangeApprovalModal } from './components/SpecChangeApprovalModal';
+import { FloorSetupModal } from './components/FloorSetupModal';
+import { AssignJobModal } from './components/AssignJobModal';
+import { LiveFloor } from './components/LiveFloor';
 import { MaterialInward } from './types';
 import { COMPANY_INFO } from './data/mockData';
 
@@ -222,6 +225,8 @@ function MainAppContent() {
   const [selectedJobForBundleWeighing, setSelectedJobForBundleWeighing] = useState<MaterialInward | null>(null);
   const [selectedJobForPoClose, setSelectedJobForPoClose] = useState<MaterialInward | null>(null);
   const [selectedJobForSpecApproval, setSelectedJobForSpecApproval] = useState<MaterialInward | null>(null);
+  const [isFloorSetupOpen, setIsFloorSetupOpen] = useState(false);
+  const [selectedJobForAssign, setSelectedJobForAssign] = useState<MaterialInward | null>(null);
 
   const handleOpenChallan = (job: MaterialInward) => {
     setSelectedJobForChallan(job);
@@ -245,6 +250,11 @@ function MainAppContent() {
         </footer>
       </div>
     );
+  }
+
+  // Big-screen factory display at /floor (factory logins only).
+  if (isFactoryAuthenticated && window.location.pathname.startsWith('/floor')) {
+    return dataLoading ? <LoadingScreen label="Loading the floor..." /> : <LiveFloor />;
   }
 
   return (
@@ -272,6 +282,8 @@ function MainAppContent() {
             onOpenCustomerModal={() => setIsCustomerModalOpen(true)}
             onOpenPoCloseModal={(job) => setSelectedJobForPoClose(job)}
             onOpenSpecApprovalModal={(job) => setSelectedJobForSpecApproval(job)}
+            onOpenFloorSetup={() => setIsFloorSetupOpen(true)}
+            onOpenAssignModal={(job) => setSelectedJobForAssign(job)}
           />
         ) : (
           <CustomerPortal
@@ -298,6 +310,16 @@ function MainAppContent() {
         <PoCloseModal
           job={selectedJobForPoClose}
           onClose={() => setSelectedJobForPoClose(null)}
+        />
+      )}
+
+      {isFloorSetupOpen && <FloorSetupModal onClose={() => setIsFloorSetupOpen(false)} />}
+
+      {selectedJobForAssign && (
+        <AssignJobModal
+          job={selectedJobForAssign}
+          onClose={() => setSelectedJobForAssign(null)}
+          onOpenFloorSetup={() => setIsFloorSetupOpen(true)}
         />
       )}
 

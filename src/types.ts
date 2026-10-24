@@ -46,6 +46,33 @@ export interface SlitCut {
   remarks?: string;
 }
 
+// A slitting machine on the factory floor.
+export interface Machine {
+  id: string;
+  number: string; // e.g. "M-01", shown big on the Live Floor screen
+  name: string; // e.g. "Film slitter 1600 mm"
+  notes?: string;
+  active: boolean;
+}
+
+// A person on the floor (operators, helpers, supervisors).
+export interface FloorStaff {
+  id: string;
+  name: string;
+  role: 'operator' | 'helper' | 'supervisor' | 'other';
+  phone?: string;
+  active: boolean;
+}
+
+// Optional: which machine and people are running an order.
+export interface JobAssignment {
+  machineId?: string;
+  operatorId?: string;
+  helperIds?: string[];
+  assignedAt: string;
+  assignedBy: string;
+}
+
 // A slit width the customer wants and how much of it, in kg (50 g least count).
 export interface RequestedSlitSize {
   id: string;
@@ -295,6 +322,7 @@ export interface MaterialInward {
   // Production Tracking
   status: ProductionStatus;
   assignedMachine: string;
+  assignment?: JobAssignment; // machine / operator / helpers, if the factory assigned them
   estimatedDeliveryDate?: string; // YYYY-MM-DD
   eddHistory: EddHistoryEntry[];
 

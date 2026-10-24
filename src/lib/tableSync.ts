@@ -7,7 +7,7 @@ export interface SyncedRow<T> {
 }
 
 interface TableSyncOptions<T extends { id: string }> {
-  table: 'jobs' | 'customers';
+  table: 'jobs' | 'customers' | 'machines' | 'floor_staff';
   // Extra columns stored next to `data` (e.g. customer_id for jobs).
   toColumns: (item: T) => Record<string, unknown>;
   // Cleans an item before it is saved (e.g. removes passwords).

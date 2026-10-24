@@ -514,3 +514,71 @@ begin
   end loop;
 end;
 $$;
+
+-- =====================================================================
+-- 7. Factory floor: machines and floor staff (operators, helpers ...)
+--    Factory logins only. Safe to run on its own and to run again.
+-- =====================================================================
+
+create table if not exists public.machines (
+  id text primary key,
+  data jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.floor_staff (
+  id text primary key,
+  data jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create or replace function public.floor_before_write()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.data := new.data || jsonb_build_object('id', new.id);
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
+drop trigger if exists machines_before_write on public.machines;
+create trigger machines_before_write
+before insert or update on public.machines
+for each row execute function public.floor_before_write();
+
+drop trigger if exists floor_staff_before_write on public.floor_staff;
+create trigger floor_staff_before_write
+before insert or update on public.floor_staff
+for each row execute function public.floor_before_write();
+
+alter table public.machines enable row level security;
+alter table public.floor_staff enable row level security;
+
+drop policy if exists machines_staff_all on public.machines;
+create policy machines_staff_all on public.machines for all to authenticated
+  using (public.is_staff()) with check (public.is_staff());
+drop policy if exists floor_staff_staff_all on public.floor_staff;
+create policy floor_staff_staff_all on public.floor_staff for all to authenticated
+  using (public.is_staff()) with check (public.is_staff());
+
+revoke all on public.machines, public.floor_staff from anon;
+grant select, insert, update, delete on public.machines, public.floor_staff to authenticated;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['machines', 'floor_staff'] loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end;
+$$;

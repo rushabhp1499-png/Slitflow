@@ -40,6 +40,8 @@ interface FactoryDashboardProps {
   onOpenCustomerModal?: () => void;
   onOpenPoCloseModal?: (job: MaterialInward) => void;
   onOpenSpecApprovalModal?: (job: MaterialInward) => void;
+  onOpenFloorSetup?: () => void;
+  onOpenAssignModal?: (job: MaterialInward) => void;
 }
 
 export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
@@ -51,10 +53,14 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
   onOpenCustomerModal,
   onOpenPoCloseModal,
   onOpenSpecApprovalModal,
+  onOpenFloorSetup,
+  onOpenAssignModal,
 }) => {
   const {
     jobs,
     customers,
+    machines,
+    floorStaff,
     updateJobStatus,
     reopenCustomerPo,
   } = useProduction();
@@ -216,6 +222,30 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             >
               <Building2 className="w-3.5 h-3.5 text-blue-400" />
               <span>Customer Master & Emails</span>
+            </button>
+          )}
+
+          {/* Big-screen floor display, opened in its own tab for the TV */}
+          <a
+            href="/floor"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold transition"
+            title="Open the Live Floor screen for the factory TV"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />
+            <span>Live Floor</span>
+          </a>
+
+          {onOpenFloorSetup && (
+            <button
+              type="button"
+              onClick={onOpenFloorSetup}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold transition"
+              title="Machines, operators and helpers"
+            >
+              <Users className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Floor Setup</span>
             </button>
           )}
 
@@ -667,6 +697,27 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                         {/* Production Status & Dispatches */}
                         <td className="py-3.5 px-4 align-top">
                           <StatusBadge status={job.status} />
+
+                          {/* Machine and team (optional) */}
+                          {onOpenAssignModal && !isPermanentlyClosed && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenAssignModal(job)}
+                              className="mt-1.5 flex items-center gap-1 text-[11px] text-left hover:underline"
+                              title="Assign machine, operator and helpers"
+                            >
+                              {job.assignment?.machineId ? (
+                                <span className="font-semibold text-slate-800">
+                                  {machines.find((m) => m.id === job.assignment?.machineId)?.number || 'Machine'}
+                                  {job.assignment.operatorId
+                                    ? ` • ${floorStaff.find((s) => s.id === job.assignment?.operatorId)?.name || ''}`
+                                    : ''}
+                                </span>
+                              ) : (
+                                <span className="font-bold text-blue-700">+ Assign machine</span>
+                              )}
+                            </button>
+                          )}
 
                           {/* Dispatched Weight vs Balance */}
                           {dispatchedWeight > 0 && (
