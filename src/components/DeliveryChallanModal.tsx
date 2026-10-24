@@ -147,28 +147,13 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
     );
   };
 
-  // Quick selection presets - Strictly operating on the bundle checklist
+  // Header checkbox: tick or untick every ready bundle
   const selectAllReadyBundles = () => {
     setSelectedBundleIds(readyBundles.map((b) => b.id));
   };
 
   const clearAllBundleSelections = () => {
     setSelectedBundleIds([]);
-  };
-
-  const selectEvenBundles = () => {
-    const evens = readyBundles.filter((_, idx) => (idx + 1) % 2 === 0);
-    setSelectedBundleIds(evens.map((b) => b.id));
-  };
-
-  const selectOddBundles = () => {
-    const odds = readyBundles.filter((_, idx) => (idx + 1) % 2 !== 0);
-    setSelectedBundleIds(odds.map((b) => b.id));
-  };
-
-  const selectFirstNBundles = (n: number) => {
-    const subset = readyBundles.slice(0, n);
-    setSelectedBundleIds(subset.map((b) => b.id));
   };
 
   // Toggle bundle selection when editing an existing challan
@@ -579,58 +564,6 @@ ${companyContactLine()}`;
                 </div>
               </div>
 
-              {/* Quick Bundle Selection Presets */}
-              <div className="mb-5">
-                <label className="block text-xs font-bold text-slate-700 mb-2">
-                  Quick Bundle Selection Presets:
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={selectAllReadyBundles}
-                    className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <span>⚡ Select All Ready Bundles</span>
-                    <span className="font-mono text-[11px]">({readyBundles.length} bundles • {readyWeight.toFixed(2)} kg)</span>
-                  </button>
-                  {readyBundles.length >= 2 && (
-                    <button
-                      type="button"
-                      onClick={() => selectFirstNBundles(Math.max(1, Math.ceil(readyBundles.length / 2)))}
-                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-300 text-blue-800 rounded-lg text-xs font-bold transition cursor-pointer"
-                    >
-                      📦 First Half Lot ({Math.ceil(readyBundles.length / 2)} bundles)
-                    </button>
-                  )}
-                  {readyBundles.length >= 2 && (
-                    <button
-                      type="button"
-                      onClick={selectEvenBundles}
-                      className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 border border-purple-300 text-purple-800 rounded-lg text-xs font-bold transition cursor-pointer"
-                      title="Dispatch Bundles #2, #4, #6... and keep odd bundles on shop floor"
-                    >
-                      🎯 Even Bundles (#2, #4...)
-                    </button>
-                  )}
-                  {readyBundles.length >= 2 && (
-                    <button
-                      type="button"
-                      onClick={selectOddBundles}
-                      className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 border border-purple-300 text-purple-800 rounded-lg text-xs font-bold transition cursor-pointer"
-                    >
-                      🎯 Odd Bundles (#1, #3...)
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={clearAllBundleSelections}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold transition cursor-pointer"
-                  >
-                    Clear All
-                  </button>
-                </div>
-              </div>
-
               {/* Generation Form */}
               <form onSubmit={handleCreateNewChallan} className="space-y-4">
                 {/* Granular Bundle Selection Section */}
@@ -639,55 +572,13 @@ ${companyContactLine()}`;
                     <div className="flex items-center gap-2">
                       <CheckSquare className="w-4 h-4 text-blue-700" />
                       <h4 className="text-xs font-black uppercase tracking-wider text-slate-900">
-                        Select Bundles to Dispatch (Tick mark individual bundles)
+                        Bundles in this challan
                       </h4>
                       <span className="text-[10px] bg-blue-100 text-blue-800 font-extrabold px-2 py-0.5 rounded-full">
                         {selectedBundleIds.length} of {readyBundles.length} selected
                       </span>
                     </div>
 
-                    {readyBundles.length > 0 && (
-                      <div className="flex items-center gap-1.5 flex-wrap text-xs">
-                        <button
-                          type="button"
-                          onClick={selectAllReadyBundles}
-                          className="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 rounded-md font-bold text-[11px] transition"
-                        >
-                          Select All
-                        </button>
-                        <button
-                          type="button"
-                          onClick={clearAllBundleSelections}
-                          className="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-md font-semibold text-[11px] transition"
-                        >
-                          Clear
-                        </button>
-                        <button
-                          type="button"
-                          onClick={selectEvenBundles}
-                          className="px-2.5 py-1 bg-blue-50 border border-blue-300 hover:bg-blue-100 text-blue-800 rounded-md font-bold text-[11px] transition"
-                          title="Select Bundles #2, #4, #6... (leave bundle 3 on shop floor)"
-                        >
-                          Even (#2, #4...)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={selectOddBundles}
-                          className="px-2.5 py-1 bg-blue-50 border border-blue-300 hover:bg-blue-100 text-blue-800 rounded-md font-bold text-[11px] transition"
-                        >
-                          Odd (#1, #3...)
-                        </button>
-                        {readyBundles.length >= 2 && (
-                          <button
-                            type="button"
-                            onClick={() => selectFirstNBundles(2)}
-                            className="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 rounded-md font-semibold text-[11px] transition"
-                          >
-                            First 2
-                          </button>
-                        )}
-                      </div>
-                    )}
                   </div>
 
                   {readyBundles.length > 0 ? (
