@@ -1707,7 +1707,8 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const job = jobs.find(j => j.id === jobId);
     if (!job) throw new Error('Job not found');
 
-    const nextNumber = (job.bundles?.length || 0) + 1;
+    // Highest existing number + 1, so a deleted bundle's tag is never reused.
+    const nextNumber = (job.bundles || []).reduce((max, b) => Math.max(max, b.bundleNumber || 0), 0) + 1;
     const bundleTag = `BNDL-${String(nextNumber).padStart(2, '0')}`;
     const nowIso = new Date().toISOString();
 
@@ -1778,7 +1779,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const job = jobs.find(j => j.id === jobId);
     if (!job) return [];
     const nowIso = new Date().toISOString();
-    let currentCount = job.bundles?.length || 0;
+    let currentCount = (job.bundles || []).reduce((max, b) => Math.max(max, b.bundleNumber || 0), 0);
 
     const newRecords: BundleRecord[] = bundlesList.map(bData => {
       currentCount += 1;

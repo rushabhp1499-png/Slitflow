@@ -1,17 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { MaterialInward, CoreType } from '../types';
 import { useProduction } from '../context/ProductionContext';
-import {
-  Scale,
-  Plus,
-  Trash2,
-  X,
-  Package,
-  Truck,
-  PlusCircle,
-  Hash,
-  Sparkles
-} from 'lucide-react';
+import { toScaleKg, formatKg } from '../utils/weight';
+import { printBundleSticker } from '../utils/bundleSticker';
+import { Scale, Plus, Trash2, X, Package, Truck, PlusCircle, Printer } from 'lucide-react';
 
 interface BundleWeighingModalProps {
   job: MaterialInward;
@@ -21,166 +13,127 @@ interface BundleWeighingModalProps {
 
 interface RollRow {
   id: string;
-  rollCount: number;
-  widthMm: number;
+  rollCount: string;
+  widthMm: string;
 }
 
-export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({
-  job,
-  onClose,
-  onOpenChallan,
-}) => {
-  const { jobs, addBundleToJob, addMultipleBundlesToJob, deleteBundleFromJob } = useProduction();
+// Remembered on this device between bundles and between orders.
+const PREFS_KEY = 'slitflow_bundle_prefs_v1';
+interface BundlePrefs {
+  coreType: CoreType;
+  tareKg: string;
+  printAfterSave: boolean;
+}
+const loadPrefs = (): BundlePrefs => {
+  try {
+    const saved = localStorage.getItem(PREFS_KEY);
+    if (saved) return { coreType: 'paper_core', tareKg: '1.20', printAfterSave: false, ...JSON.parse(saved) };
+  } catch {
+    // ignore
+  }
+  return { coreType: 'paper_core', tareKg: '1.20', printAfterSave: false };
+};
 
-  // Always read reactive current job to ensure immediate bundle list updates
+export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({ job, onClose, onOpenChallan }) => {
+  const { jobs, addBundleToJob, deleteBundleFromJob } = useProduction();
+
+  // Always read the live job so the list updates immediately
   const currentJob = jobs.find((j) => j.id === job.id) || job;
   const bundles = currentJob.bundles || [];
-
-  // Next bundle number to be created
-  const nextBundleNumber = bundles.length + 1;
+  const nextBundleNumber = bundles.reduce((max, b) => Math.max(max, b.bundleNumber || 0), 0) + 1;
   const nextBundleTag = `BNDL-${String(nextBundleNumber).padStart(2, '0')}`;
 
-  // Defaults from customer order specifications
-  const defaultRolls = currentJob.bundleSpecs?.unitsPerBundle || 10;
-  const defaultWidth = currentJob.outputDetails?.slitCuts?.[0]?.widthMm || currentJob.incomingWidth / 10 || 20;
-  const targetBundleWeight = currentJob.bundleSpecs?.targetBundleWeightKg || 28;
+  // Widths the customer ordered, offered as one-tap buttons
+  const orderedWidths = Array.from(
+    new Set([
+      ...(currentJob.requestedSlitSizes || []).map((s) => s.widthMm),
+      ...(currentJob.outputDetails?.slitCuts || []).map((c) => c.widthMm),
+    ])
+  );
 
-  // Form states
-  const [grossInput, setGrossInput] = useState<string>((targetBundleWeight + 1.2).toFixed(2));
-  const [coreType, setCoreType] = useState<CoreType>('paper_core');
-  const [paperCoreTareInput, setPaperCoreTareInput] = useState<string>('1.20'); // Editable paper core weight!
+  const [prefs, setPrefs] = useState<BundlePrefs>(loadPrefs);
+  useEffect(() => {
+    try {
+      localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    } catch {
+      // ignore
+    }
+  }, [prefs]);
 
-  // Flexible roll sizes list inside the same bundle
+  // Empty on purpose: every bundle needs a real scale reading.
+  const [grossInput, setGrossInput] = useState<string>('');
+  const grossRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    grossRef.current?.focus();
+  }, []);
+
   const [rollRows, setRollRows] = useState<RollRow[]>([
-    { id: '1', rollCount: defaultRolls, widthMm: defaultWidth },
+    {
+      id: '1',
+      rollCount: String(currentJob.bundleSpecs?.unitsPerBundle || ''),
+      widthMm: orderedWidths[0] ? String(orderedWidths[0]) : '',
+    },
   ]);
+  const [lastSavedTag, setLastSavedTag] = useState<string>('');
+  const [popupBlocked, setPopupBlocked] = useState(false);
 
-  const addRollRow = () => {
-    setRollRows((prev) => [
-      ...prev,
-      {
-        id: String(Date.now() + Math.random()),
-        rollCount: 5,
-        widthMm: defaultWidth,
-      },
-    ]);
-  };
+  const updateRollRow = (id: string, field: 'rollCount' | 'widthMm', value: string) =>
+    setRollRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
 
-  const removeRollRow = (id: string) => {
-    if (rollRows.length <= 1) return;
-    setRollRows((prev) => prev.filter((r) => r.id !== id));
-  };
+  const validRolls = rollRows.filter((r) => Number(r.rollCount) > 0 && Number(r.widthMm) > 0);
+  const totalRollsCount = validRolls.reduce((sum, r) => sum + Math.round(Number(r.rollCount)), 0);
+  const rollsSummaryText = validRolls
+    .map((r) => `${Math.round(Number(r.rollCount))} roll${Number(r.rollCount) === 1 ? '' : 's'} × ${Number(r.widthMm)} mm`)
+    .join(' + ');
 
-  const updateRollRow = (id: string, field: 'rollCount' | 'widthMm', value: number) => {
-    setRollRows((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, [field]: value } : r))
-    );
-  };
+  const gross = toScaleKg(Number(grossInput) || 0);
+  const tare = prefs.coreType === 'paper_core' ? toScaleKg(Math.max(0, Number(prefs.tareKg) || 0)) : 0;
+  const net = Math.max(0, toScaleKg(gross - tare));
 
-  // Roll summary computation
-  const totalRollsCount = useMemo(
-    () => rollRows.reduce((sum, r) => sum + (r.rollCount || 0), 0),
-    [rollRows]
-  );
+  const totalNetWeighed = useMemo(() => toScaleKg(bundles.reduce((acc, b) => acc + b.netWeightKg, 0)), [bundles]);
+  const readyBundlesCount = bundles.filter((b) => b.status === 'ready').length;
 
-  const rollsSummaryText = useMemo(() => {
-    if (rollRows.length === 0) return '0 rolls';
-    return rollRows
-      .map((r) => `${r.rollCount} roll${r.rollCount === 1 ? '' : 's'} × ${r.widthMm}mm`)
-      .join(' + ');
-  }, [rollRows]);
+  const canSave = gross > 0 && net > 0 && validRolls.length > 0;
 
-  // Tare & Net calculations
-  const grossNumber = Number(grossInput) || 0;
-  const paperCoreTareKg = Math.max(0, Number(paperCoreTareInput) || 0);
-  const effectiveTare = coreType === 'paper_core' ? paperCoreTareKg : 0;
-  const netWeight = Math.max(0, Number((grossNumber - effectiveTare).toFixed(2)));
-
-  // Totals across already logged bundles
-  const totalNetWeighed = useMemo(
-    () => Number(bundles.reduce((acc, b) => acc + b.netWeightKg, 0).toFixed(2)),
-    [bundles]
-  );
-  const readyBundlesCount = useMemo(
-    () => bundles.filter((b) => b.status === 'ready').length,
-    [bundles]
-  );
-
-  const handleAddBundle = () => {
-    if (grossNumber <= 0) return;
-
-    addBundleToJob(currentJob.id, {
-      rollItems: rollRows.map((r) => ({
-        widthMm: r.widthMm,
-        rollCount: r.rollCount,
+  const handleSave = () => {
+    if (!canSave) return;
+    const saved = addBundleToJob(currentJob.id, {
+      rollItems: validRolls.map((r) => ({
+        widthMm: Number(r.widthMm),
+        rollCount: Math.round(Number(r.rollCount)),
         unitType: currentJob.bundleSpecs?.unitType || 'reels',
       })),
       rollsSummary: rollsSummaryText,
-      totalRollsCount: Math.max(1, totalRollsCount),
-      grossWeightKg: grossNumber,
-      coreType,
-      paperCoreTareWeightKg: effectiveTare,
-      netWeightKg: netWeight,
-      weighedBy: 'Factory Floor Operator',
+      totalRollsCount: totalRollsCount,
+      grossWeightKg: gross,
+      coreType: prefs.coreType,
+      paperCoreTareWeightKg: tare,
+      netWeightKg: net,
     });
-
-    // Advance scale reading slightly for convenience on next bundle
-    const delta = (Math.random() * 0.4 - 0.2).toFixed(2);
-    setGrossInput(Math.max(1, Number((grossNumber + Number(delta)).toFixed(2))).toFixed(2));
-  };
-
-  const handleAddBatch5 = () => {
-    if (grossNumber <= 0) return;
-
-    const list = [];
-    for (let i = 0; i < 5; i++) {
-      const jitter = (Math.random() * 0.5 - 0.25).toFixed(2);
-      const g = Math.max(1, Number((grossNumber + Number(jitter)).toFixed(2)));
-      const n = Math.max(0, Number((g - effectiveTare).toFixed(2)));
-      list.push({
-        rollItems: rollRows.map((r) => ({
-          widthMm: r.widthMm,
-          rollCount: r.rollCount,
-          unitType: currentJob.bundleSpecs?.unitType || 'reels',
-        })),
-        rollsSummary: rollsSummaryText,
-        totalRollsCount: Math.max(1, totalRollsCount),
-        grossWeightKg: g,
-        coreType,
-        paperCoreTareWeightKg: effectiveTare,
-        netWeightKg: n,
-        weighedBy: 'Factory Floor Operator',
-      });
-    }
-    addMultipleBundlesToJob(currentJob.id, list);
+    setLastSavedTag(saved.bundleTag);
+    if (prefs.printAfterSave) setPopupBlocked(!printBundleSticker(saved, currentJob));
+    // Ready for the next bundle: clear the reading, keep core and roll settings.
+    setGrossInput('');
+    grossRef.current?.focus();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-5 bg-slate-900/60 backdrop-blur-xs">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl overflow-hidden flex flex-col max-h-[96vh]">
         {/* Header */}
-        <div className="bg-slate-900 text-white px-5 py-4 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-blue-600 rounded-xl text-white shadow-xs">
-              <Package className="w-5 h-5" />
+        <div className="bg-slate-900 text-white px-4 sm:px-5 py-3.5 flex items-center justify-between shrink-0 gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-extrabold text-base">Weigh Bundles</h3>
+              <span className="text-xs bg-blue-900/60 text-blue-100 font-mono px-2 py-0.5 rounded font-bold">
+                PO {currentJob.customerPoNo}
+              </span>
             </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-extrabold text-base tracking-tight">Add Bundle Details & Weighment</h3>
-                <span className="text-xs bg-slate-800 text-slate-300 font-mono px-2 py-0.5 rounded font-semibold">
-                  {currentJob.jobNo}
-                </span>
-                <span className="text-xs bg-blue-900/60 text-blue-200 font-mono px-2 py-0.5 rounded font-semibold">
-                  PO: {currentJob.customerPoNo}
-                </span>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Customer: <strong className="text-slate-300">{currentJob.customerName}</strong>
-              </p>
-            </div>
+            <p className="text-xs text-slate-400 mt-0.5 truncate">
+              {currentJob.customerName} • {currentJob.grade}
+            </p>
           </div>
-
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {onOpenChallan && readyBundlesCount > 0 && (
               <button
                 type="button"
@@ -188,378 +141,271 @@ export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({
                   onClose();
                   onOpenChallan();
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition shadow-xs"
-                title="Create Delivery Challan for ready bundles"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg"
               >
                 <Truck className="w-3.5 h-3.5" />
-                <span>Make Challan ({readyBundlesCount} ready)</span>
+                <span className="hidden sm:inline">Make Challan</span> ({readyBundlesCount})
               </button>
             )}
-            <button
-              onClick={onClose}
-              className="text-slate-400 hover:text-white p-1 rounded-lg transition hover:bg-slate-800"
-              title="Close modal"
-            >
+            <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" title="Close">
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Quick Summary Bar */}
-        <div className="bg-slate-50 border-b border-slate-200 px-5 py-2.5 flex flex-wrap items-center justify-between text-xs gap-3">
-          <div className="flex items-center gap-6 flex-wrap">
-            <div>
-              <span className="text-slate-500 block text-[11px] font-semibold">Inward Raw Material:</span>
-              <strong className="text-slate-900 font-mono text-sm">{currentJob.incomingWeight.toLocaleString()} kg</strong>
-            </div>
-            <div>
-              <span className="text-slate-500 block text-[11px] font-semibold">Total Net Weighed:</span>
-              <strong className="text-blue-700 font-mono text-sm">{totalNetWeighed.toLocaleString()} kg</strong>
-            </div>
-            <div>
-              <span className="text-slate-500 block text-[11px] font-semibold">Logged Bundles:</span>
-              <strong className="text-slate-900 font-mono text-sm">
-                {bundles.length} ({readyBundlesCount} ready for dispatch)
-              </strong>
-            </div>
+        {/* Summary */}
+        <div className="bg-slate-50 border-b border-slate-200 px-4 sm:px-5 py-2 grid grid-cols-3 gap-2 text-xs">
+          <div>
+            <span className="text-slate-500 block text-[11px]">Received</span>
+            <strong className="font-mono">{formatKg(currentJob.incomingWeight)} kg</strong>
           </div>
-
-          {/* Prominent Next Bundle indicator */}
-          <div className="inline-flex items-center gap-1.5 bg-blue-100/90 text-blue-900 border border-blue-300 px-3 py-1 rounded-lg font-bold font-mono text-xs">
-            <Hash className="w-3.5 h-3.5 text-blue-700" />
-            <span>Next to Log: Bundle #{nextBundleNumber}</span>
+          <div>
+            <span className="text-slate-500 block text-[11px]">Packed (net)</span>
+            <strong className="font-mono text-blue-700">{formatKg(totalNetWeighed)} kg</strong>
+          </div>
+          <div>
+            <span className="text-slate-500 block text-[11px]">Bundles</span>
+            <strong className="font-mono">
+              {bundles.length} ({readyBundlesCount} ready)
+            </strong>
           </div>
         </div>
 
-        {/* Form & Logged List */}
-        <div className="p-5 overflow-y-auto space-y-5 grow">
-          {/* Main Bundle Entry Form Panel */}
-          <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-4 shadow-2xs space-y-4">
-            
-            {/* Top Indicator: Current Bundle ID Banner */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200/90">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  Entering Details For:
-                </span>
-                <span className="inline-flex items-center gap-1.5 text-sm font-black text-blue-700 bg-white border border-blue-300 px-3 py-1 rounded-lg shadow-2xs font-mono">
-                  <Package className="w-4 h-4 text-blue-600" />
-                  Bundle #{nextBundleNumber} ({nextBundleTag})
-                </span>
-              </div>
-              <span className="text-xs text-slate-500 font-medium hidden sm:inline">
-                Saving will automatically queue Bundle #{nextBundleNumber + 1}
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-5 grow">
+          {/* Entry form: type the scale reading and press Enter */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSave();
+            }}
+            className="bg-slate-50/80 border border-slate-200 rounded-xl p-4 space-y-4"
+          >
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 text-base font-black text-blue-700 bg-white border border-blue-300 px-3 py-1 rounded-lg font-mono">
+                <Package className="w-4 h-4" /> {nextBundleTag}
               </span>
+              {lastSavedTag && (
+                <span className="text-xs text-emerald-700 font-semibold">
+                  ✓ {lastSavedTag} saved – enter the next reading
+                </span>
+              )}
             </div>
 
-            {/* Inputs: Gross Weight, Core Type, Editable Paper Core Weight, and Net Weight */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
-              
-              {/* 1. Scale Reading (Gross Weight) */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 items-start">
+              <div className="col-span-2 lg:col-span-1">
+                <label className="block text-xs font-bold text-slate-700 mb-1">Scale reading (gross kg)</label>
+                <input
+                  ref={grossRef}
+                  type="number"
+                  inputMode="decimal"
+                  step="0.05"
+                  min="0.05"
+                  value={grossInput}
+                  onChange={(e) => setGrossInput(e.target.value)}
+                  onBlur={(e) => {
+                    const v = Number(e.target.value);
+                    if (v > 0) setGrossInput(toScaleKg(v).toFixed(2));
+                  }}
+                  className="w-full bg-white border-2 border-blue-400 rounded-lg px-3 py-2.5 font-mono font-bold text-2xl text-slate-900 focus:ring-2 focus:ring-blue-600"
+                  placeholder="0.00"
+                />
+                <p className="text-[10px] text-slate-500 mt-1">Press Enter to save. Rounds to 50 g.</p>
+              </div>
+
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Scale Reading (Gross kg)
-                  </label>
-                  <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-bold px-1.5 py-0.2 rounded">
-                    50g LC
-                  </span>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Core</label>
+                <div className="grid grid-cols-2 gap-1 bg-slate-200 p-1 rounded-lg text-xs font-semibold">
+                  {(['paper_core', 'pvc_core'] as const).map((ct) => (
+                    <button
+                      key={ct}
+                      type="button"
+                      onClick={() => setPrefs((p) => ({ ...p, coreType: ct }))}
+                      className={`py-2 rounded-md ${prefs.coreType === ct ? 'bg-blue-600 text-white font-bold' : 'text-slate-700'}`}
+                    >
+                      {ct === 'paper_core' ? 'Paper' : 'Plastic'}
+                    </button>
+                  ))}
                 </div>
-                <div className="relative">
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Core weight (kg)</label>
+                {prefs.coreType === 'paper_core' ? (
                   <input
                     type="number"
                     step="0.05"
-                    min="0.05"
-                    value={grossInput}
-                    onChange={(e) => setGrossInput(e.target.value)}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-mono font-bold text-lg text-slate-900 focus:ring-2 focus:ring-blue-600 focus:border-blue-600"
-                    placeholder="28.50"
+                    min="0"
+                    value={prefs.tareKg}
+                    onChange={(e) => setPrefs((p) => ({ ...p, tareKg: e.target.value }))}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 font-mono font-bold"
                   />
-                  <span className="absolute right-3 top-2.5 text-xs font-bold text-slate-400">kg</span>
-                </div>
-                <p className="text-[10px] text-slate-500 mt-1">Scale least count: 50 grams (0.05 kg)</p>
-              </div>
-
-              {/* 2. Core type Selection */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Core type
-                </label>
-                <div className="grid grid-cols-2 gap-1 bg-slate-200 p-1 rounded-lg text-xs font-semibold">
-                  <button
-                    type="button"
-                    onClick={() => setCoreType('paper_core')}
-                    className={`py-2 px-1 rounded-md transition text-center ${
-                      coreType === 'paper_core'
-                        ? 'bg-blue-600 text-white font-bold shadow-xs'
-                        : 'text-slate-700 hover:text-slate-900'
-                    }`}
-                  >
-                    Paper Tube
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCoreType('pvc_core')}
-                    className={`py-2 px-1 rounded-md transition text-center ${
-                      coreType === 'pvc_core'
-                        ? 'bg-blue-600 text-white font-bold shadow-xs'
-                        : 'text-slate-700 hover:text-slate-900'
-                    }`}
-                  >
-                    Plastic Tube
-                  </button>
-                </div>
-              </div>
-
-              {/* 3. Editable Paper Core Weight */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {coreType === 'paper_core' ? 'Paper Tube Weight (kg)' : 'Core Tube Weight'}
-                </label>
-                {coreType === 'paper_core' ? (
-                  <div>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        step="0.05"
-                        min="0"
-                        value={paperCoreTareInput}
-                        onChange={(e) => setPaperCoreTareInput(e.target.value)}
-                        className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 font-mono font-bold text-base text-slate-900 focus:ring-2 focus:ring-blue-600"
-                        placeholder="1.20"
-                      />
-                      <span className="absolute right-3 top-2.5 text-xs font-bold text-slate-400">kg</span>
-                    </div>
-                    {/* Quick Core Weight Presets */}
-                    <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                      {[0.8, 1.0, 1.2, 1.5].map((preset) => (
-                        <button
-                          key={preset}
-                          type="button"
-                          onClick={() => setPaperCoreTareInput(preset.toFixed(2))}
-                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded border transition ${
-                            Number(paperCoreTareInput) === preset
-                              ? 'bg-blue-100 border-blue-400 text-blue-800'
-                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
-                          }`}
-                        >
-                          {preset.toFixed(1)}k
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                 ) : (
-                  <div className="bg-slate-100 border border-slate-200 rounded-lg px-3 py-2.5 text-xs text-slate-600 font-medium">
-                    0.00 kg (Plastic Tube)
+                  <div className="bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-600">
+                    Not deducted
                   </div>
                 )}
               </div>
 
-              {/* 4. Net Dispatched Weight Preview */}
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
-                <span className="text-[10px] uppercase font-bold text-emerald-800 block">
-                  Net Dispatched Weight
-                </span>
-                <span className="text-2xl font-black font-mono text-emerald-700 block mt-0.5">
-                  {netWeight > 0 ? netWeight.toFixed(2) : '0.00'} kg
-                </span>
-                <span className="text-[10px] text-emerald-600 font-medium">
-                  Core type: {coreType === 'paper_core' ? `Paper Tube (-${effectiveTare.toFixed(2)} kg)` : 'Plastic Tube'}
-                </span>
+              <div className="col-span-2 lg:col-span-1 bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-center">
+                <span className="text-[10px] uppercase font-bold text-emerald-800 block">Net weight</span>
+                <span className="text-2xl font-black font-mono text-emerald-700">{formatKg(net)} kg</span>
               </div>
             </div>
 
-            {/* Flexible Multiple Rolls & Different Widths within the same Bundle */}
-            <div className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-3">
+            {/* Rolls in this bundle (kept for the next bundle) */}
+            <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
               <div className="flex items-center justify-between">
-                <div>
-                  <label className="text-xs font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                    Roll Sizes Inside Bundle #{nextBundleNumber}
-                  </label>
-                  <p className="text-[11px] text-slate-500">
-                    Add multiple roll quantities and widths in this single bundle
-                  </p>
-                </div>
+                <span className="text-xs font-bold text-slate-700">Rolls in this bundle</span>
                 <button
                   type="button"
-                  onClick={addRollRow}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition"
+                  onClick={() =>
+                    setRollRows((prev) => [...prev, { id: String(Date.now()), rollCount: '', widthMm: '' }])
+                  }
+                  className="inline-flex items-center gap-1 text-xs font-bold text-blue-700"
                 >
-                  <PlusCircle className="w-3.5 h-3.5" />
-                  <span>+ Add Another Roll Size</span>
+                  <PlusCircle className="w-3.5 h-3.5" /> Another size
                 </button>
               </div>
-
-              {/* List of Roll Rows */}
-              <div className="space-y-2">
-                {rollRows.map((row, idx) => (
-                  <div
-                    key={row.id}
-                    className="flex items-center gap-2 sm:gap-3 bg-slate-50 p-2 rounded-lg border border-slate-200/80 flex-wrap"
-                  >
-                    <span className="text-xs font-bold text-slate-500 font-mono w-6 text-center">
-                      #{idx + 1}
-                    </span>
-
-                    <div className="flex items-center gap-1.5">
-                      <label className="text-xs font-medium text-slate-600">Rolls:</label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={row.rollCount}
-                        onChange={(e) =>
-                          updateRollRow(row.id, 'rollCount', Math.max(1, Number(e.target.value)))
-                        }
-                        className="w-16 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs font-mono font-bold text-center"
-                      />
-                    </div>
-
-                    <span className="text-slate-400 font-bold">×</span>
-
-                    <div className="flex items-center gap-1.5">
-                      <label className="text-xs font-medium text-slate-600">Width:</label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min="1"
-                          step="0.5"
-                          value={row.widthMm}
-                          onChange={(e) =>
-                            updateRollRow(row.id, 'widthMm', Math.max(1, Number(e.target.value)))
-                          }
-                          className="w-24 bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs font-mono font-bold pr-7"
-                        />
-                        <span className="absolute right-2 top-1 text-[10px] text-slate-400 font-bold">
-                          mm
-                        </span>
-                      </div>
-                    </div>
-
-                    <span className="text-xs text-slate-500 font-mono">
-                      ({row.rollCount} × {row.widthMm}mm)
-                    </span>
-
-                    {rollRows.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeRollRow(row.id)}
-                        className="ml-auto text-slate-400 hover:text-red-600 p-1 rounded transition"
-                        title="Remove this roll size"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Rolls Summary Footer */}
-              <div className="bg-slate-50 px-3 py-2 rounded-lg border border-slate-200/60 flex items-center justify-between text-xs font-medium text-slate-700">
-                <span>
-                  Bundle Summary: <strong className="text-blue-700">{rollsSummaryText}</strong>
-                </span>
-                <span className="font-mono text-slate-600">
-                  Total Rolls: <strong className="text-slate-900">{totalRollsCount}</strong>
-                </span>
-              </div>
+              {rollRows.map((row) => (
+                <div key={row.id} className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="number"
+                    min="1"
+                    value={row.rollCount}
+                    onChange={(e) => updateRollRow(row.id, 'rollCount', e.target.value)}
+                    placeholder="Rolls"
+                    className="w-20 bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-sm font-mono font-bold text-center"
+                  />
+                  <span className="text-slate-400 font-bold">×</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="any"
+                    value={row.widthMm}
+                    onChange={(e) => updateRollRow(row.id, 'widthMm', e.target.value)}
+                    placeholder="Width"
+                    className="w-24 bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-sm font-mono font-bold"
+                  />
+                  <span className="text-xs text-slate-500">mm</span>
+                  {orderedWidths.map((w) => (
+                    <button
+                      key={w}
+                      type="button"
+                      onClick={() => updateRollRow(row.id, 'widthMm', String(w))}
+                      className={`text-[11px] font-bold px-2 py-1 rounded border ${
+                        Number(row.widthMm) === w ? 'bg-blue-100 border-blue-400 text-blue-800' : 'bg-white border-slate-200 text-slate-600'
+                      }`}
+                    >
+                      {w}
+                    </button>
+                  ))}
+                  {rollRows.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setRollRows((prev) => prev.filter((r) => r.id !== row.id))}
+                      className="ml-auto text-slate-400 hover:text-red-600 p-1"
+                      title="Remove this size"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {rollsSummaryText && <p className="text-[11px] text-slate-600">{rollsSummaryText} • {totalRollsCount} rolls</p>}
             </div>
 
-            {/* Action Buttons: Log Single Bundle vs Add 5 Batch */}
-            <div className="flex flex-wrap items-center justify-end gap-2.5 pt-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={prefs.printAfterSave}
+                  onChange={(e) => setPrefs((p) => ({ ...p, printAfterSave: e.target.checked }))}
+                  className="w-4 h-4"
+                />
+                Print sticker after each save
+              </label>
               <button
-                type="button"
-                onClick={handleAddBatch5}
-                disabled={grossNumber <= 0}
-                className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-lg transition disabled:opacity-50"
-                title="Add 5 consecutive bundles with current configuration"
+                type="submit"
+                disabled={!canSave}
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg disabled:opacity-40 flex items-center gap-2"
               >
-                + Add 5 Identical Bundles
-              </button>
-
-              <button
-                type="button"
-                onClick={handleAddBundle}
-                disabled={grossNumber <= 0}
-                className="px-5 py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-bold rounded-lg transition disabled:opacity-50 flex items-center gap-2 shadow-xs cursor-pointer"
-                title={`Save Bundle #${nextBundleNumber}`}
-              >
-                <Plus className="w-4 h-4" />
-                <span>+ Save Bundle #{nextBundleNumber}</span>
+                <Plus className="w-4 h-4" /> Save {nextBundleTag}
               </button>
             </div>
-          </div>
+            {popupBlocked && (
+              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                The browser blocked the sticker window. Allow pop-ups for this site, or use the Sticker button in the list below.
+              </p>
+            )}
+          </form>
 
-          {/* Bundles Ledger Table */}
+          {/* Bundles list */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <Package className="w-4 h-4 text-blue-600" />
-                Logged Bundles ({bundles.length})
+                <Scale className="w-4 h-4 text-blue-600" /> Bundles ({bundles.length})
               </h4>
               <span className="text-xs font-mono text-slate-600">
-                Total Net Weighed: <strong className="text-slate-900">{totalNetWeighed.toLocaleString()} kg</strong>
+                Net total: <strong>{formatKg(totalNetWeighed)} kg</strong>
               </span>
             </div>
 
             {bundles.length === 0 ? (
-              <div className="p-8 text-center bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500">
-                No bundles logged yet. Configure the weight and roll sizes above and click &quot;+ Save Bundle #1&quot;.
+              <div className="p-6 text-center bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500">
+                No bundles yet. Type the first scale reading above and press Enter.
               </div>
             ) : (
-              <div className="border border-slate-200 rounded-xl overflow-hidden max-h-72 overflow-y-auto">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto max-h-72 overflow-y-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-100 text-slate-600 uppercase text-[10px] font-bold sticky top-0">
                     <tr>
-                      <th className="py-2.5 px-3">Bundle #</th>
-                      <th className="py-2.5 px-3">Rolls & Sizes</th>
-                      <th className="py-2.5 px-3">Core type</th>
-                      <th className="py-2.5 px-3 text-right">Gross Wt</th>
-                      <th className="py-2.5 px-3 text-right font-bold">Net Wt</th>
-                      <th className="py-2.5 px-3 text-center">Status</th>
-                      <th className="py-2.5 px-3 text-center">Action</th>
+                      <th className="py-2 px-3">Bundle</th>
+                      <th className="py-2 px-3">Rolls</th>
+                      <th className="py-2 px-3 text-right">Gross</th>
+                      <th className="py-2 px-3 text-right">Net</th>
+                      <th className="py-2 px-3 text-center">Status</th>
+                      <th className="py-2 px-3 text-right" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {bundles.map((b) => (
-                      <tr key={b.id} className="hover:bg-slate-50 font-mono">
-                        <td className="py-2 px-3 font-bold text-slate-900">
-                          {b.bundleTag}
-                        </td>
-                        <td className="py-2 px-3 text-slate-700 font-sans font-medium">
-                          {b.rollsSummary}
-                        </td>
-                        <td className="py-2 px-3 text-slate-700 font-sans font-medium">
-                          {b.coreType === 'paper_core' ? 'Paper Tube' : 'Plastic Tube'}
-                        </td>
-                        <td className="py-2 px-3 text-right text-slate-600">
-                          {b.grossWeightKg.toFixed(2)} kg
-                        </td>
-                        <td className="py-2 px-3 text-right font-black text-emerald-700">
-                          {b.netWeightKg.toFixed(2)} kg
-                        </td>
-                        <td className="py-2 px-3 text-center font-sans">
+                    {[...bundles].reverse().map((b) => (
+                      <tr key={b.id} className="hover:bg-slate-50">
+                        <td className="py-2 px-3 font-mono font-bold">{b.bundleTag}</td>
+                        <td className="py-2 px-3 text-slate-700">{b.rollsSummary}</td>
+                        <td className="py-2 px-3 text-right font-mono">{formatKg(b.grossWeightKg)}</td>
+                        <td className="py-2 px-3 text-right font-mono font-bold text-emerald-700">{formatKg(b.netWeightKg)}</td>
+                        <td className="py-2 px-3 text-center">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              b.status === 'dispatched'
-                                ? 'bg-slate-100 text-slate-600'
-                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              b.status === 'dispatched' ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700'
                             }`}
                           >
                             {b.status === 'dispatched' ? 'Dispatched' : 'Ready'}
                           </span>
                         </td>
-                        <td className="py-2 px-3 text-center">
-                          {b.status !== 'dispatched' && (
+                        <td className="py-2 px-3">
+                          <div className="flex items-center justify-end gap-1">
                             <button
                               type="button"
-                              onClick={() => deleteBundleFromJob(currentJob.id, b.id)}
-                              className="text-slate-400 hover:text-red-600 transition p-1"
-                              title="Delete bundle"
+                              onClick={() => setPopupBlocked(!printBundleSticker(b, currentJob))}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-100"
+                              title="Print this bundle's sticker"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Printer className="w-3 h-3" /> Sticker
                             </button>
-                          )}
+                            {b.status !== 'dispatched' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (window.confirm(`Delete ${b.bundleTag}?`)) deleteBundleFromJob(currentJob.id, b.id);
+                                }}
+                                className="text-slate-400 hover:text-red-600 p-1"
+                                title="Delete bundle"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -570,16 +416,8 @@ export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex items-center justify-between shrink-0">
-          <span className="text-xs text-slate-500 font-medium">
-            Progressive Enterprises • Precision Slitting & Bundling Floor Scale
-          </span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-5 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-lg transition"
-          >
+        <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex justify-end shrink-0">
+          <button type="button" onClick={onClose} className="px-5 py-2 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-lg">
             Done
           </button>
         </div>
