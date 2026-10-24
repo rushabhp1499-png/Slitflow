@@ -204,7 +204,7 @@ export const DailyProductionChart: React.FC<DailyProductionChartProps> = ({
 
     const overallYield = totalFinished + totalScrap > 0
       ? Number(((totalFinished / (totalFinished + totalScrap)) * 100).toFixed(1))
-      : 97.2;
+      : null; // nothing produced yet
 
     return {
       totalFinished,
@@ -447,7 +447,7 @@ export const DailyProductionChart: React.FC<DailyProductionChartProps> = ({
               </div>
               <div className="mt-1.5">
                 <span className="text-xl font-black text-slate-900">
-                  {totals.overallYield}%
+                  {totals.overallYield === null ? '—' : `${totals.overallYield}%`}
                 </span>
                 <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
                   Scrap: {totals.totalScrap.toLocaleString()} kg

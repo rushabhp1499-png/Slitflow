@@ -91,17 +91,29 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
 
   const totalIncomingWeight = jobs.reduce((acc, j) => acc + j.incomingWeight, 0);
 
-  // Filtered jobs list
+  // Filtered jobs list. The PO is the main reference, so PO matches are listed first.
+  const query = searchQuery.trim().toLowerCase();
+  const poMatchRank = (job: MaterialInward) => {
+    const po = (job.customerPoNo || '').toLowerCase();
+    if (!query) return 0;
+    if (po === query) return 0;
+    if (po.startsWith(query)) return 1;
+    if (po.includes(query)) return 2;
+    return 3;
+  };
   const filteredJobs = jobs.filter((job) => {
     const customer = customers.find((c) => c.id === job.customerId);
-    const matchesSearch =
-      job.jobNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.customerPoNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.grade.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.inwardChallanNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.vehicleNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (customer?.email || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const fields = [
+      job.customerPoNo,
+      job.jobNo,
+      job.customerName,
+      job.grade,
+      job.inwardChallanNo,
+      job.vehicleNo,
+      customer?.email,
+      ...(job.challans || []).map((c) => c.challanNo),
+    ];
+    const matchesSearch = !query || fields.some((f) => (f || '').toLowerCase().includes(query));
 
     const isClosed = isJobClosed(job);
 
@@ -124,7 +136,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
       customerFilter === 'ALL' || job.customerId === customerFilter;
 
     return matchesSearch && matchesStatus && matchesCustomer;
-  });
+  }).sort((a, b) => poMatchRank(a) - poMatchRank(b));
 
   const getDaysRemaining = (dateStr?: string) => {
     if (!dateStr) return null;
@@ -149,10 +161,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-bold text-sm sm:text-base text-white">
-                Factory Master Control Panel
-              </span>
-              <span className="text-[10px] uppercase font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded">
-                Live Shop Floor
+                Factory Dashboard
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
@@ -385,7 +394,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
           </div>
           <div className="mt-2 flex items-baseline gap-1.5">
             <span className="text-xl font-black text-slate-900">{closedPoCount}</span>
-            <span className="text-xs text-slate-500 font-medium">Audited</span>
+            <span className="text-xs text-slate-500 font-medium">Closed</span>
           </div>
           <div className="flex items-center justify-between mt-1">
             <p className="text-[10px] text-slate-400">Reconciled POs</p>
@@ -416,7 +425,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
-              placeholder="Search PO #, Job, Customer, Grade, Vehicle..."
+              placeholder="Search by PO number (or job, customer, challan, vehicle)..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-600"
