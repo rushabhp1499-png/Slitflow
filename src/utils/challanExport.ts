@@ -1,346 +1,208 @@
+import { jsPDF } from 'jspdf';
+import autoTableImport from 'jspdf-autotable';
+
+// The plugin's default export is wrapped one level deeper when loaded as CommonJS.
+const autoTable = ((autoTableImport as unknown as { default?: typeof autoTableImport }).default ??
+  autoTableImport) as typeof autoTableImport;
 import { DeliveryChallan, MaterialInward } from '../types';
-import { COMPANY_INFO } from '../data/mockData';
+import { COMPANY, companyContactLine } from '../config/company';
 
-export function downloadChallanAsHtml(challan: DeliveryChallan, job: MaterialInward) {
-  const customerAddress = challan.customerDeliveryAddress || challan.customerRegisteredAddress || 'Pune, Maharashtra';
-  const htmlContent = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Delivery Challan - ${challan.challanNo}</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      margin: 0;
-      padding: 24px;
-      color: #0f172a;
-      background: #ffffff;
-      font-size: 13px;
-      line-height: 1.5;
-    }
-    .container {
-      max-width: 800px;
-      margin: 0 auto;
-      border: 1px solid #cbd5e1;
-      padding: 32px;
-      border-radius: 8px;
-    }
-    .header {
-      border-bottom: 2px solid #0f172a;
-      padding-bottom: 16px;
-      margin-bottom: 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-    }
-    .company-title {
-      font-size: 22px;
-      font-weight: 800;
-      color: #0f172a;
-      margin: 0 0 4px 0;
-      letter-spacing: -0.5px;
-    }
-    .company-subtitle {
-      font-size: 12px;
-      color: #475569;
-      margin: 0 0 4px 0;
-    }
-    .doc-badge {
-      text-align: right;
-    }
-    .doc-title {
-      font-size: 18px;
-      font-weight: 800;
-      color: #1e3a8a;
-      text-transform: uppercase;
-      margin: 0;
-    }
-    .doc-rule {
-      font-size: 11px;
-      color: #64748b;
-      margin-top: 2px;
-    }
-    .challan-no {
-      font-family: monospace;
-      font-size: 16px;
-      font-weight: 700;
-      color: #0f172a;
-      background: #f1f5f9;
-      padding: 4px 8px;
-      border-radius: 4px;
-      display: inline-block;
-      margin-top: 6px;
-    }
-    .meta-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      padding: 14px;
-      margin-bottom: 20px;
-    }
-    .meta-box h4 {
-      margin: 0 0 6px 0;
-      font-size: 11px;
-      text-transform: uppercase;
-      color: #64748b;
-      letter-spacing: 0.5px;
-    }
-    .meta-box p {
-      margin: 0 0 4px 0;
-      font-size: 13px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 20px;
-    }
-    th {
-      background: #0f172a;
-      color: #ffffff;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      padding: 8px 10px;
-      text-align: left;
-    }
-    td {
-      padding: 10px;
-      border-bottom: 1px solid #e2e8f0;
-      font-size: 12px;
-    }
-    .text-right {
-      text-align: right;
-    }
-    .font-mono {
-      font-family: monospace;
-      font-weight: bold;
-    }
-    .summary-bar {
-      display: flex;
-      justify-content: space-between;
-      background: #f1f5f9;
-      padding: 10px 16px;
-      border-radius: 6px;
-      margin-bottom: 24px;
-      font-family: monospace;
-      font-size: 12px;
-    }
-    .terms {
-      font-size: 11px;
-      color: #64748b;
-      margin-bottom: 30px;
-      border-top: 1px solid #e2e8f0;
-      padding-top: 12px;
-    }
-    .terms ol {
-      margin: 4px 0 0 0;
-      padding-left: 20px;
-    }
-    .signatures {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      margin-top: 40px;
-      padding-top: 20px;
-      border-top: 1px solid #cbd5e1;
-    }
-    .sign-box {
-      text-align: center;
-      width: 220px;
-    }
-    .sign-line {
-      height: 48px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-style: italic;
-      color: #94a3b8;
-    }
-    .sign-title {
-      border-top: 1px dashed #94a3b8;
-      padding-top: 4px;
-      font-size: 12px;
-      font-weight: bold;
-      color: #334155;
-    }
-    @media print {
-      body { padding: 0; }
-      .container { border: none; padding: 0; }
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <div>
-        <h1 class="company-title">${COMPANY_INFO.name}</h1>
-        <p class="company-subtitle">${COMPANY_INFO.address}</p>
-        <p class="company-subtitle">GSTIN: <strong>${COMPANY_INFO.gstin}</strong> | Tel: ${COMPANY_INFO.phone} | Email: ${COMPANY_INFO.email}</p>
-      </div>
-      <div class="doc-badge">
-        <h2 class="doc-title">Delivery Challan</h2>
-        <div class="doc-rule">Rule 55, CGST Rules 2017 (Job Work)</div>
-        <div class="challan-no">${challan.challanNo}</div>
-      </div>
-    </div>
+const kg = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const orDash = (v?: string | null) => (v && v.trim() && v.trim() !== '—' ? v.trim() : '—');
 
-    <div class="meta-grid">
-      <div class="meta-box">
-        <h4>Consignee / Customer Details</h4>
-        <p><strong>${challan.customerName}</strong></p>
-        <p>GSTIN: <strong>${challan.customerGst || 'N/A'}</strong></p>
-        <p>Delivery Plant: ${customerAddress}</p>
-        <p>Customer PO: <strong>${job.customerPoNo}</strong></p>
-      </div>
-      <div class="meta-box">
-        <h4>Dispatch & Logistics Details</h4>
-        <p>Date of Dispatch: <strong>${new Date(challan.challanDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</strong></p>
-        <p>Vehicle No: <strong>${challan.vehicleNo}</strong></p>
-        <p>Transporter: <strong>${challan.transporterName || 'Self / Road'}</strong></p>
-        <p>E-Way Bill: <strong>${challan.eWayBillNo || '24198273910'}</strong></p>
-        <p>Inward Ref: <strong>${challan.incomingChallanRef || job.inwardChallanNo}</strong></p>
-      </div>
-    </div>
+// Builds the delivery challan as an A4 PDF and downloads it.
+// Only recorded data is printed: weighed bundles, entered vehicle / e-way bill numbers.
+export function downloadChallanPdf(challan: DeliveryChallan, job: MaterialInward) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const margin = 14;
+  let y = 16;
 
-    <table>
-      <thead>
-        <tr>
-          <th style="width: 40px">#</th>
-          <th>Description of Material</th>
-          <th>Grade & Gauge</th>
-          <th class="text-right">Bundles</th>
-          <th class="text-right">Net Weight (KG)</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>1</td>
-          <td>
-            <strong>Precision Slitted Material</strong><br/>
-            <span style="color: #64748b">Processed from Inward Job #${job.jobNo}</span>
-          </td>
-          <td>${job.grade} (${job.thickness}${job.thicknessUnit})</td>
-          <td class="text-right font-mono">${challan.totalBundles} Bundles</td>
-          <td class="text-right font-mono" style="font-size: 14px">${challan.thisDispatchWeightKg.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} KG</td>
-        </tr>
-      </tbody>
-    </table>
+  // Letterhead
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text(COMPANY.name, margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.setTextColor(70);
+  const addressLines = doc.splitTextToSize(COMPANY.address, 110);
+  doc.text(addressLines, margin, y + 5);
+  doc.text(companyContactLine(), margin, y + 5 + addressLines.length * 4);
 
-    ${(() => {
-      const dispatchedList = challan.dispatchedBundles && challan.dispatchedBundles.length > 0
-        ? challan.dispatchedBundles
-        : (job.bundles || []).filter(b => b.dispatchedInChallanId === challan.id || challan.selectedBundleIds?.includes(b.id));
+  doc.setTextColor(20);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(13);
+  doc.text('DELIVERY CHALLAN', pageW - margin, y, { align: 'right' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text('Job work – Rule 55, CGST Rules 2017', pageW - margin, y + 5, { align: 'right' });
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.text(challan.challanNo, pageW - margin, y + 11, { align: 'right' });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
+  doc.text(
+    `Date: ${new Date(challan.challanDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`,
+    pageW - margin,
+    y + 16,
+    { align: 'right' }
+  );
+  if (challan.revisionLabel && challan.revisionLabel !== 'Original') {
+    doc.text(challan.revisionLabel, pageW - margin, y + 20, { align: 'right' });
+  }
 
-      const displayList = (dispatchedList && dispatchedList.length > 0)
-        ? dispatchedList
-        : Array.from({ length: Math.max(1, challan.totalBundles) }, (_, i) => {
-            const avgNet = Number((challan.thisDispatchWeightKg / Math.max(1, challan.totalBundles)).toFixed(2));
-            const tare = 1.20;
-            return {
-              id: `auto-${i}`,
-              bundleNumber: i + 1,
-              bundleTag: `BNDL-${String(i + 1).padStart(2, '0')}`,
-              rollsSummary: `${job.thickness}${job.thicknessUnit} Precision Slitted Coils`,
-              totalRollsCount: 10,
-              grossWeightKg: Number((avgNet + tare).toFixed(2)),
-              paperCoreTareWeightKg: tare,
-              netWeightKg: avgNet,
-              coreType: 'paper_core' as const,
-              status: 'dispatched' as const,
-            };
-          });
+  y += 26;
+  doc.setDrawColor(20);
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, pageW - margin, y);
+  y += 3;
 
-      const totalGross = displayList.reduce((sum, b) => sum + (b.grossWeightKg || 0), 0);
-      const totalTare = displayList.reduce((sum, b) => sum + (b.paperCoreTareWeightKg || 0), 0);
-      const totalNet = displayList.reduce((sum, b) => sum + (b.netWeightKg || 0), 0);
+  // Consignee and dispatch details, side by side
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin },
+    theme: 'grid',
+    styles: { fontSize: 8.5, cellPadding: 1.8, valign: 'top' },
+    headStyles: { fillColor: [241, 245, 249], textColor: 20, fontStyle: 'bold' },
+    head: [['Consignee (Customer)', 'Dispatch Details']],
+    body: [
+      [
+        [
+          challan.customerName,
+          orDash(challan.customerDeliveryAddress || challan.customerRegisteredAddress),
+          `GSTIN: ${orDash(challan.customerGst)}`,
+        ].join('\n'),
+        [
+          `Customer PO: ${orDash(challan.customerPoNo || job.customerPoNo)}`,
+          `Our Job No: ${job.jobNo}`,
+          `Vehicle No: ${orDash(challan.vehicleNo)}`,
+          `Transporter: ${orDash(challan.transporterName)}`,
+          `E-Way Bill: ${orDash(challan.eWayBillNo)}`,
+          `Inward Ref: ${orDash(challan.incomingChallanRef)}`,
+        ].join('\n'),
+      ],
+    ],
+    columnStyles: { 0: { cellWidth: (pageW - margin * 2) / 2 } },
+  });
 
-      return `
-      <div style="margin: 20px 0 14px 0;">
-        <h3 style="font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 6px 0; color: #0f172a; border-bottom: 1.5px solid #0f172a; padding-bottom: 4px;">
-          Itemized Bundle Dispatch Schedule & Floor Weighment Manifest (${displayList.length} Bundles Dispatched)
-        </h3>
-        <p style="font-size: 11px; color: #64748b; margin: 0 0 8px 0;">
-          Physical bundle scale readings verified at Progressive Enterprises dispatch dock. Weight least count: 50 g (0.05 kg certified resolution).
-        </p>
-        <table style="margin-bottom: 12px; font-size: 11.5px;">
-          <thead>
-            <tr>
-              <th style="width: 32px; text-align: center;">#</th>
-              <th>Bundle Tag</th>
-              <th>Slitted Specification</th>
-              <th>Core type</th>
-              <th class="text-right">Gross Wt (KG)</th>
-              <th class="text-right">Tare Wt (KG)</th>
-              <th class="text-right">Net Wt (KG)</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${displayList.map((b, idx) => `
-              <tr>
-                <td style="text-align: center; color: #64748b;">${idx + 1}</td>
-                <td style="font-family: monospace; font-weight: bold; color: #1e3a8a;">${b.bundleTag}</td>
-                <td>${b.rollsSummary || `${b.totalRollsCount || 10} reels`}</td>
-                <td>${b.coreType === 'paper_core' ? 'Paper Tube' : 'Plastic Tube'}</td>
-                <td class="text-right font-mono">${b.grossWeightKg.toFixed(2)}</td>
-                <td class="text-right font-mono" style="color: #b45309;">-${b.paperCoreTareWeightKg.toFixed(2)}</td>
-                <td class="text-right font-mono" style="font-weight: 800; color: #0f172a;">${b.netWeightKg.toFixed(2)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-          <tfoot>
-            <tr style="background: #f8fafc; font-weight: bold; border-top: 2px solid #0f172a;">
-              <td colspan="4" style="text-align: right; text-transform: uppercase; font-size: 11px; color: #334155;">
-                Total Dispatched in This Challan (${displayList.length} Bundles):
-              </td>
-              <td class="text-right font-mono">${totalGross.toFixed(2)} KG</td>
-              <td class="text-right font-mono" style="color: #b45309;">-${totalTare.toFixed(2)} KG</td>
-              <td class="text-right font-mono" style="font-weight: 900; font-size: 13px; color: #1e3a8a;">${totalNet.toFixed(2)} KG</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-      `;
-    })()}
+  const lastY = () => (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
 
-    <div class="summary-bar">
-      <div>Total Inward: <strong>${challan.totalOrderWeightKg.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} KG</strong></div>
-      <div style="color: #1e3a8a">Dispatched This Challan: <strong>${challan.thisDispatchWeightKg.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} KG</strong></div>
-      <div style="color: #047857">Remaining Factory Balance: <strong>${challan.remainingBalanceWeightKg.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} KG</strong></div>
-    </div>
+  // Material line
+  const widths = job.outputDetails?.slitCuts?.length
+    ? job.outputDetails.slitCuts.map((c) => `${c.widthMm} mm`).join(', ')
+    : (job.requestedSlitSizes || []).map((s) => `${s.widthMm} mm`).join(', ');
+  autoTable(doc, {
+    startY: lastY() + 4,
+    margin: { left: margin, right: margin },
+    theme: 'striped',
+    styles: { fontSize: 8.5, cellPadding: 1.8 },
+    headStyles: { fillColor: [15, 23, 42], textColor: 255 },
+    head: [['#', 'Description', 'Bundles', 'Net Weight (kg)']],
+    body: [
+      [
+        '1',
+        `Slitted ${job.grade}, ${job.thickness} ${job.thicknessUnit}${widths ? `\nSlit widths: ${widths}` : ''}`,
+        String(challan.totalBundles),
+        kg(challan.thisDispatchWeightKg),
+      ],
+    ],
+    columnStyles: { 0: { cellWidth: 8 }, 2: { halign: 'right', cellWidth: 20 }, 3: { halign: 'right', cellWidth: 32 } },
+  });
 
-    <div class="terms">
-      <strong>Terms & Conditions:</strong>
-      <ol>
-        <li>Goods dispatched solely for Job-Work processing under Rule 55 of CGST Act. Not an outright commercial sale.</li>
-        <li>Customer must inspect bundle tags, net weighment, and notify discrepancies within 24 hours of delivery.</li>
-        <li>Subject to Bhiwandi / Thane jurisdiction.</li>
-      </ol>
-    </div>
+  // Bundle schedule: only bundles that were actually weighed and put on this challan
+  const bundles =
+    challan.dispatchedBundles && challan.dispatchedBundles.length > 0
+      ? challan.dispatchedBundles
+      : (job.bundles || []).filter(
+          (b) => b.dispatchedInChallanId === challan.id || challan.selectedBundleIds?.includes(b.id)
+        );
+  if (bundles.length > 0) {
+    const gross = bundles.reduce((s, b) => s + b.grossWeightKg, 0);
+    const tare = bundles.reduce((s, b) => s + (b.paperCoreTareWeightKg || 0) + (b.otherPackagingTareKg || 0), 0);
+    const net = bundles.reduce((s, b) => s + b.netWeightKg, 0);
+    autoTable(doc, {
+      startY: lastY() + 4,
+      margin: { left: margin, right: margin },
+      theme: 'grid',
+      styles: { fontSize: 7.8, cellPadding: 1.4 },
+      headStyles: { fillColor: [51, 65, 85], textColor: 255 },
+      head: [['#', 'Bundle', 'Contents', 'Core', 'Gross (kg)', 'Tare (kg)', 'Net (kg)']],
+      body: bundles.map((b, i) => [
+        String(i + 1),
+        b.bundleTag,
+        b.rollsSummary || `${b.totalRollsCount} rolls`,
+        b.coreType === 'paper_core' ? 'Paper' : b.coreType === 'pvc_core' ? 'Plastic' : '—',
+        kg(b.grossWeightKg),
+        kg((b.paperCoreTareWeightKg || 0) + (b.otherPackagingTareKg || 0)),
+        kg(b.netWeightKg),
+      ]),
+      foot: [
+        [
+          '',
+          '',
+          `Total ${bundles.length} bundles`,
+          '',
+          { content: kg(gross), styles: { halign: 'right' } },
+          { content: kg(tare), styles: { halign: 'right' } },
+          { content: kg(net), styles: { halign: 'right' } },
+        ],
+      ],
+      footStyles: { fillColor: [241, 245, 249], textColor: 20, fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 7 },
+        4: { halign: 'right' },
+        5: { halign: 'right' },
+        6: { halign: 'right', fontStyle: 'bold' },
+      },
+    });
+  }
 
-    <div class="signatures">
-      <div class="sign-box">
-        <div class="sign-line">Received in good order & condition</div>
-        <div class="sign-title">Customer Seal & Signature</div>
-      </div>
-      <div class="sign-box">
-        <div class="sign-line">[Authorized Signatory]</div>
-        <div class="sign-title">For Progressive Enterprises</div>
-      </div>
-    </div>
-  </div>
-</body>
-</html>`;
+  // Material balance
+  autoTable(doc, {
+    startY: lastY() + 4,
+    margin: { left: margin, right: margin },
+    theme: 'plain',
+    styles: { fontSize: 8.5, cellPadding: 1.5, fontStyle: 'bold' },
+    body: [
+      [
+        `Material received: ${kg(challan.totalOrderWeightKg)} kg`,
+        `This challan: ${kg(challan.thisDispatchWeightKg)} kg`,
+        `Balance with us: ${kg(challan.remainingBalanceWeightKg)} kg`,
+      ],
+    ],
+  });
 
-  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', `${challan.challanNo.replace(/[^a-zA-Z0-9_-]/g, '_')}.html`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  // Terms and signatures (move to a new page if there is no room)
+  y = lastY() + 6;
+  if (y > 245) {
+    doc.addPage();
+    y = 20;
+  }
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.text('Terms', margin, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.8);
+  const terms = [
+    'Goods returned after job work under Rule 55 of the CGST Rules, 2017. Not a sale.',
+    'Please check bundle tags and weights on receipt and report any difference within 24 hours.',
+    `Subject to ${COMPANY.jurisdiction} jurisdiction.`,
+  ];
+  terms.forEach((t, i) => {
+    const lines = doc.splitTextToSize(`${i + 1}. ${t}`, pageW - margin * 2);
+    doc.text(lines, margin, y + 4.5);
+    y += 4 * lines.length;
+  });
+
+  y += 22;
+  doc.setDrawColor(150);
+  doc.setLineWidth(0.2);
+  doc.line(margin, y, margin + 60, y);
+  doc.line(pageW - margin - 60, y, pageW - margin, y);
+  doc.setFontSize(8);
+  doc.text("Receiver's signature & seal", margin, y + 4);
+  doc.text(`For ${COMPANY.name}`, pageW - margin, y + 4, { align: 'right' });
+  doc.text(`Prepared by: ${orDash(challan.preparedBy)}`, pageW - margin, y + 8, { align: 'right' });
+
+  doc.save(`${challan.challanNo.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`);
 }

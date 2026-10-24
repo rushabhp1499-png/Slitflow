@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { MaterialInward, DeliveryChallan } from '../types';
 import { useProduction } from '../context/ProductionContext';
 import { COMPANY_INFO } from '../data/mockData';
-import { downloadChallanAsHtml } from '../utils/challanExport';
+import { companyContactLine } from '../config/company';
+import { downloadChallanPdf } from '../utils/challanExport';
 import { WhatsAppDispatchModal } from './WhatsAppDispatchModal';
 import { EmailDispatchModal } from './EmailDispatchModal';
 import {
@@ -256,7 +257,7 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
 
   const handleDownload = () => {
     if (!activeChallan) return;
-    downloadChallanAsHtml(activeChallan, job);
+    downloadChallanPdf(activeChallan, job);
   };
 
   const handlePrint = () => {
@@ -345,8 +346,7 @@ This advice was dispatched from our official email ID: progressive.ent8@gmail.co
 For any inquiries or dispatch reconciliation, please reach out to:
 Progressive Enterprises Precision Slitting Works
 Shed no. H-11/5,6, Shree Arihant Compound, Kalher, Bhiwandi, Maharashtra - 421302
-Email: progressive.ent8@gmail.com
-Phone: +91 98200 45678`;
+${companyContactLine()}`;
   };
 
   const handleLaunchWhatsApp = (openWeb: boolean = false) => {
@@ -994,10 +994,10 @@ Phone: +91 98200 45678`;
                     type="button"
                     onClick={handleDownload}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold rounded-lg transition shadow-2xs"
-                    title="Download standalone HTML challan file"
+                    title="Download the challan as a PDF"
                   >
                     <Download className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Download File</span>
+                    <span>Download PDF</span>
                   </button>
 
                   {/* WhatsApp Customer Button */}
@@ -1276,7 +1276,7 @@ Phone: +91 98200 45678`;
                       {COMPANY_INFO.address}
                     </p>
                     <p className="text-xs text-slate-600 mt-0.5">
-                      GSTIN: <strong className="font-mono text-slate-900">{COMPANY_INFO.gstin}</strong> | Phone: {COMPANY_INFO.phone} | Email: {COMPANY_INFO.email}
+                      {companyContactLine()}
                     </p>
                   </div>
 

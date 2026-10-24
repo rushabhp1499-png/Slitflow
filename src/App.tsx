@@ -357,10 +357,11 @@ function MainAppContent() {
               {COMPANY_INFO.name}
             </span>
             <span>•</span>
-            <span>{COMPANY_INFO.isoCert}</span>
+            <span>{COMPANY_INFO.tagline}</span>
           </div>
           <div className="text-slate-400 text-center sm:text-right">
-            Plant: Shed no. H-11/5,6, Shree Arihant Compound, Kalher, Bhiwandi, Maharashtra - 421302 • Support: {COMPANY_INFO.phone.split('/')[0]}
+            Plant: {COMPANY_INFO.address}
+            {COMPANY_INFO.phone ? ` • Support: ${COMPANY_INFO.phone}` : ''}
           </div>
         </div>
       </footer>

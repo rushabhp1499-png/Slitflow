@@ -31,7 +31,7 @@ import {
   LogOut,
   Download
 } from 'lucide-react';
-import { downloadChallanAsHtml } from '../utils/challanExport';
+import { downloadChallanPdf } from '../utils/challanExport';
 import { describeSlitSizes } from '../utils/weight';
 import { buildTimeline, nextStep, formatEventTime } from '../utils/timeline';
 import { SpecChangeRequestModal } from './SpecChangeRequestModal';
@@ -1007,12 +1007,12 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         <div className="flex items-center gap-2 shrink-0">
                           <button
                             type="button"
-                            onClick={() => downloadChallanAsHtml(ch, activeJob)}
+                            onClick={() => downloadChallanPdf(ch, activeJob)}
                             className="px-2.5 py-1.5 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-lg text-xs font-bold transition shadow-2xs flex items-center gap-1"
-                            title="Download HTML challan file"
+                            title="Download the challan as a PDF"
                           >
                             <Download className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Download</span>
+                            <span>Download PDF</span>
                           </button>
                           <button
                             type="button"

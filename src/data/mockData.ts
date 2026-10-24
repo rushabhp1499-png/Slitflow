@@ -1,16 +1,7 @@
 import { Customer, MaterialInward, AppNotification, BundleRecord, FactoryUser } from '../types';
 
-export const COMPANY_INFO = {
-  name: 'PROGRESSIVE ENTERPRISES',
-  tagline: 'Precision Slitting, Shearing & Custom Reel/Bundle Packaging Works',
-  address: 'Shed no. H-11/5,6, Shree Arihant Compound, Kalher, Bhiwandi, Maharashtra - 421302',
-  gstin: '27AAACP1234F1Z8',
-  email: 'progressive.ent8@gmail.com',
-  dispatchEmail: 'progressive.ent8@gmail.com',
-  phone: '+91 98200 45678',
-  isoCert: 'ISO 9001:2015 Certified Job-Work Facility',
-  plantHead: 'Rajesh Patel (Works Director & Plant Head)',
-};
+// Real company details live in src/config/company.ts; kept here so old imports still work.
+export { COMPANY as COMPANY_INFO } from '../config/company';
 
 export const INITIAL_FACTORY_USERS: FactoryUser[] = [
   {
