@@ -203,7 +203,7 @@ interface ProductionContextType {
     jobId: string,
     data: {
       requestedSpecs: {
-        slitWidthMm?: number;
+        slitSizes?: RequestedSlitSize[];
         targetBundleWeightKg?: number;
         unitsPerBundle?: number;
         unitType?: 'reels' | 'reams';
@@ -212,7 +212,7 @@ interface ProductionContextType {
       reason: string;
       requestedByEmail: string;
     }
-  ) => void;
+  ) => Promise<boolean>; // true once the request is saved
   approveSpecChange: (jobId: string, requestId: string, reviewNote: string, reviewedBy?: string) => void;
   rejectSpecChange: (jobId: string, requestId: string, rejectionReason: string, reviewedBy?: string) => void;
 
@@ -275,6 +275,8 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   const isFactoryAuthenticated = account?.role === 'staff';
+  // Name stamped on records (weighed by, prepared by, ...): the signed-in email.
+  const actorName = signedInEmail || 'Factory';
   const authenticatedEmail = account?.role === 'customer' ? signedInEmail : null;
 
   // ---------------------------------------------------------------------
@@ -878,7 +880,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         ? customer.authorizedEmails
         : [customer.email],
       customerPhone: customer.phone,
-      customerRegisteredAddress: customer.registeredAddress || customer.address || 'Registered Office Address',
+      customerRegisteredAddress: customer.registeredAddress || '',
       inwardChallanNo: (data.inwardChallanNo || '').trim() || '—',
       vehicleNo: cleanVehicleNo,
       receivedDate: data.receivedDate || new Date().toISOString().split('T')[0],
@@ -901,7 +903,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             {
               date: data.estimatedDeliveryDate,
               setAt: nowIso,
-              changedBy: 'Factory Inward Planner',
+              changedBy: actorName,
               note: 'Initial delivery date assigned upon inward material registration.',
             }
           ]
@@ -970,7 +972,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     jobId: string,
     eddDate: string,
     note?: string,
-    changedBy: string = 'Factory Production Manager'
+    changedBy: string = actorName
   ) => {
     setJobs(prev =>
       prev.map(job => {
@@ -1123,7 +1125,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       customerId: job.customerId,
       customerName: job.customerName,
       customerRegisteredAddress: customer?.registeredAddress || job.customerRegisteredAddress,
-      customerDeliveryAddress: customer?.plantAddress || customer?.address || 'Customer Plant Works',
+      customerDeliveryAddress: customer?.plantAddress || customer?.registeredAddress || job.customerRegisteredAddress || '',
       customerGst: job.customerGst,
       dispatchType: params.dispatchType,
       dispatchSequenceNumber: sequenceNumber,
@@ -1131,9 +1133,9 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       thisDispatchWeightKg: dispatchWeight,
       remainingBalanceWeightKg: remainingBalance,
       vehicleNo: params.vehicleNo.toUpperCase(),
-      transporterName: params.transporterName || 'Express Road Lines',
+      transporterName: params.transporterName || '',
       driverPhone: params.driverPhone,
-      eWayBillNo: params.eWayBillNo || `EWB-${Math.floor(100000000000 + Math.random() * 900000000000)}`,
+      eWayBillNo: params.eWayBillNo || '',
       incomingChallanRef: `${job.inwardChallanNo} dated ${job.receivedDate}`,
       items: [
         {
@@ -1183,7 +1185,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       emailSent: true,
       sentToEmails: allAuthorizedEmails,
       emailSentAt: nowIso,
-      preparedBy: 'P. Verma (Authorized Dispatch Officer)',
+      preparedBy: actorName,
       status: 'dispatched',
     };
 
@@ -1286,7 +1288,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       revisionLabel: existingChallan.revisionLabel || 'Original',
       challanNo: existingChallan.challanNo,
       revisedAt: nowIso,
-      revisedBy: params.revisedBy || 'Production & Dispatch Manager',
+      revisedBy: params.revisedBy || actorName,
       reason: params.reason,
       vehicleNo: existingChallan.vehicleNo,
       transporterName: existingChallan.transporterName,
@@ -1310,7 +1312,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       amendedFromChallanId: existingChallan.id,
       revisionReason: params.reason,
       revisedAt: nowIso,
-      revisedBy: params.revisedBy || 'Production & Dispatch Manager',
+      revisedBy: params.revisedBy || actorName,
       revisionHistory: [...existingHistory, supersededSnapshot],
       vehicleNo: newVehicleNo,
       transporterName: newTransporter,
@@ -1623,7 +1625,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const closeCustomerPo = (
     jobId: string,
     closingNotes: string = 'All material delivered, reconciled, and audited. PO permanently closed.',
-    closedBy: string = 'Factory Master (Works Head - R. K. Sharma)'
+    closedBy: string = actorName
   ) => {
     const nowIso = new Date().toISOString();
     const job = jobs.find(j => j.id === jobId);
@@ -1726,7 +1728,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       netWeightKg: bundleData.netWeightKg,
       status: 'ready',
       weighedAt: nowIso,
-      weighedBy: bundleData.weighedBy || 'Sunil Patil (Production & Dispatch Manager)',
+      weighedBy: bundleData.weighedBy || actorName,
       notes: bundleData.notes,
     };
 
@@ -1798,7 +1800,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         netWeightKg: bData.netWeightKg,
         status: 'ready',
         weighedAt: nowIso,
-        weighedBy: bData.weighedBy || 'Sunil Patil (Production & Dispatch Manager)',
+        weighedBy: bData.weighedBy || actorName,
         notes: bData.notes,
       };
     });
@@ -1883,7 +1885,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
         const editRecord: BundleEditRecord = {
           editedAt: nowIso,
-          editedBy: updates.editedBy || 'Sunil Patil (Production Manager)',
+          editedBy: updates.editedBy || actorName,
           reason: updates.reason,
           previousGross: targetBundle.grossWeightKg,
           newGross: updates.grossWeightKg,
@@ -1931,7 +1933,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
               isVoided: true,
               voidReason: reason,
               voidedAt: nowIso,
-              voidedBy: voidedBy || 'Sunil Patil (Production Manager)',
+              voidedBy: voidedBy || actorName,
               status: 'ready' as const,
             };
           }),
@@ -1945,6 +1947,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     jobId: string,
     data: {
       requestedSpecs: {
+        slitSizes?: RequestedSlitSize[];
         slitWidthMm?: number;
         targetBundleWeightKg?: number;
         unitsPerBundle?: number;
@@ -1956,7 +1959,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   ) => {
     const job = jobs.find(j => j.id === jobId);
-    if (!job) return;
+    if (!job) return Promise.resolve(false);
 
     const nowIso = new Date().toISOString();
     const requestId = 'req-' + Date.now();
@@ -1970,10 +1973,10 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       requestedByEmail: data.requestedByEmail,
       requestedAt: nowIso,
       originalSpecs: {
-        slitWidthMm: job.bundleSpecs ? (job.outputDetails?.slitCuts?.[0]?.widthMm || 20) : 20,
-        targetBundleWeightKg: job.bundleSpecs?.targetBundleWeightKg || 25,
-        unitsPerBundle: job.bundleSpecs?.unitsPerBundle || 10,
-        unitType: job.bundleSpecs?.unitType || 'reels',
+        slitSizes: job.requestedSlitSizes,
+        targetBundleWeightKg: job.bundleSpecs?.targetBundleWeightKg,
+        unitsPerBundle: job.bundleSpecs?.unitsPerBundle,
+        unitType: job.bundleSpecs?.unitType,
         customerInstructions: job.customerInstructions,
       },
       requestedSpecs: data.requestedSpecs,
@@ -1983,13 +1986,14 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     // Saved by a database function, which only lets customers add a pending
     // request and also creates the factory notification.
-    if (!supabase) return;
-    void supabase.rpc('request_spec_change', { p_job_id: jobId, p_request: newRequest }).then(({ error }) => {
+    if (!supabase) return Promise.resolve(false);
+    return Promise.resolve(supabase.rpc('request_spec_change', { p_job_id: jobId, p_request: newRequest })).then(({ error }) => {
       if (error) {
         reportSyncError(`Could not send the change request: ${errorMessage(error)}`);
-        return;
+        return false;
       }
       void jobsSync.refresh(jobId);
+      return true;
     });
   };
 
@@ -2010,7 +2014,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             ...r,
             status: 'approved' as const,
             reviewedAt: nowIso,
-            reviewedBy: reviewedBy || 'Factory Operations Master',
+            reviewedBy: reviewedBy || actorName,
             reviewNote,
           };
         });
@@ -2025,6 +2029,9 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         return {
           ...j,
           customerInstructions: targetReq.requestedSpecs.customerInstructions || j.customerInstructions,
+          requestedSlitSizes: targetReq.requestedSpecs.slitSizes?.length
+            ? targetReq.requestedSpecs.slitSizes
+            : j.requestedSlitSizes,
           bundleSpecs: updatedBundleSpecs,
           specChangeRequests: updatedRequests,
           updatedAt: nowIso,
@@ -2057,7 +2064,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
             ...r,
             status: 'rejected' as const,
             reviewedAt: nowIso,
-            reviewedBy: reviewedBy || 'Factory Operations Master',
+            reviewedBy: reviewedBy || actorName,
             reviewNote: rejectionReason,
           };
         });

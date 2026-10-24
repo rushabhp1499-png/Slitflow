@@ -39,6 +39,7 @@ interface FactoryDashboardProps {
   onOpenBundleWeighingModal: (job: MaterialInward) => void;
   onOpenCustomerModal?: () => void;
   onOpenPoCloseModal?: (job: MaterialInward) => void;
+  onOpenSpecApprovalModal?: (job: MaterialInward) => void;
 }
 
 export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
@@ -49,6 +50,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
   onOpenBundleWeighingModal,
   onOpenCustomerModal,
   onOpenPoCloseModal,
+  onOpenSpecApprovalModal,
 }) => {
   const {
     jobs,
@@ -498,7 +500,6 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                   const customer = customers.find((c) => c.id === job.customerId);
                   const isPermanentlyClosed =
                     job.poStatus === 'closed' ||
-                    job.poStatus === 'permanently_closed' ||
                     job.status === 'po_closed';
                   const dispatchedWeight = job.dispatchedWeightKg || 0;
                   const remainingWeight = Math.max(0, job.incomingWeight - dispatchedWeight);
@@ -544,6 +545,18 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                               ⚡ Partial Dispatched
                             </span>
                           ) : null}
+
+                          {(job.specChangeRequests || []).some((r) => r.status === 'pending_approval') && onOpenSpecApprovalModal && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenSpecApprovalModal(job)}
+                              className="mt-1.5 inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded animate-pulse"
+                              title="The customer asked to change this order. Review it."
+                            >
+                              <AlertCircle className="w-3 h-3 text-amber-700" />
+                              Change request
+                            </button>
+                          )}
                         </td>
 
                         {/* Customer */}
@@ -795,10 +808,10 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                                     Customer Registered Address & Consignee Works:
                                   </span>
                                   <p className="text-slate-700 leading-snug">
-                                    <strong>Registered Office:</strong> {customer?.registeredAddress || job.customerAddress}
+                                    <strong>Registered Office:</strong> {customer?.registeredAddress || job.customerRegisteredAddress || '—'}
                                   </p>
                                   <p className="text-slate-700 leading-snug mt-1">
-                                    <strong>Plant Unloading:</strong> {customer?.plantAddress || job.customerAddress}
+                                    <strong>Plant Unloading:</strong> {customer?.plantAddress || customer?.registeredAddress || '—'}
                                   </p>
                                 </div>
 

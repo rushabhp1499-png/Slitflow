@@ -32,6 +32,8 @@ import {
   Download
 } from 'lucide-react';
 import { downloadChallanAsHtml } from '../utils/challanExport';
+import { describeSlitSizes } from '../utils/weight';
+import { SpecChangeRequestModal } from './SpecChangeRequestModal';
 
 interface CustomerPortalProps {
   onOpenInwardModal: () => void;
@@ -142,8 +144,9 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
   const currentStageIndex = activeJob ? getStageIndex(activeJob.status) : 0;
   const isPermanentlyClosed =
     activeJob?.poStatus === 'closed' ||
-    activeJob?.poStatus === 'permanently_closed' ||
     activeJob?.status === 'po_closed';
+  const hasPendingSpecRequest = (activeJob?.specChangeRequests || []).some((r) => r.status === 'pending_approval');
+  const [specRequestJob, setSpecRequestJob] = useState<MaterialInward | null>(null);
   const dispatchedWeight = activeJob?.dispatchedWeightKg || 0;
   const remainingWeight = activeJob ? Math.max(0, activeJob.incomingWeight - dispatchedWeight) : 0;
   const challansList = activeJob?.challans && activeJob.challans.length > 0
@@ -304,7 +307,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
             <div className="space-y-2">
               {customerJobs.map((job) => {
                 const isSelected = activeJob?.id === job.id;
-                const isClosed = job.poStatus === 'permanently_closed';
+                const isClosed = job.poStatus === 'closed' || job.status === 'po_closed';
                 return (
                   <div
                     key={job.id}
@@ -374,12 +377,12 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
               <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
                   <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm font-black text-slate-900">
-                        Job #{activeJob.jobNo}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-sm font-black text-blue-800">
+                        PO {activeJob.customerPoNo}
                       </span>
-                      <span className="font-mono text-xs font-bold text-blue-800 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
-                        PO #{activeJob.customerPoNo}
+                      <span className="font-mono text-[11px] text-slate-500">
+                        {activeJob.jobNo}
                       </span>
                       {isPermanentlyClosed ? (
                         <span className="text-xs bg-slate-900 text-slate-100 font-bold px-2 py-0.5 rounded flex items-center gap-1">
@@ -399,6 +402,22 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
 
                   {/* Actions & Requests */}
                   <div className="flex flex-wrap items-center gap-2 shrink-0 self-start sm:self-center">
+                    {!isPermanentlyClosed && activeJob.status !== 'dispatched' && (
+                      hasPendingSpecRequest ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-2 bg-amber-50 text-amber-900 border border-amber-200 rounded-lg text-xs font-bold">
+                          <Clock className="w-4 h-4 text-amber-600" /> Change request pending
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setSpecRequestJob(activeJob)}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition shadow-xs"
+                        >
+                          <Sliders className="w-4 h-4" />
+                          <span>Request Change</span>
+                        </button>
+                      )
+                    )}
                     {challansList.length > 0 && (
                       <button
                         type="button"
@@ -424,7 +443,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                           Purchase Order Permanently Closed & Audited
                         </span>
                         <span className="text-[10px] bg-red-500/20 text-red-300 font-mono px-2 py-0.5 rounded border border-red-500/30">
-                          {activeJob.poClosedDate}
+                          {activeJob.poClosedAt ? new Date(activeJob.poClosedAt).toLocaleDateString('en-IN') : ''}
                         </span>
                       </div>
                       <p className="text-xs text-slate-300 leading-relaxed">
@@ -709,13 +728,13 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
 
               </div>
 
-              {/* SPEC AMENDMENT & APPROVAL BACKTRACK SECTION */}
+              {/* CHANGE REQUESTS: what the customer asked for and the factory's decision */}
               {activeJob.specChangeRequests && activeJob.specChangeRequests.length > 0 && (
                 <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
                     <span className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
                       <History className="w-4 h-4 text-amber-600" />
-                      Spec Amendment & Backtrack Log ({activeJob.specChangeRequests.length})
+                      Change Requests ({activeJob.specChangeRequests.length})
                     </span>
                   </div>
 
@@ -724,7 +743,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       <div
                         key={req.id}
                         className={`p-4 rounded-xl border text-xs space-y-2 ${
-                          req.status === 'pending'
+                          req.status === 'pending_approval'
                             ? 'bg-amber-50/70 border-amber-300'
                             : req.status === 'approved'
                             ? 'bg-emerald-50/70 border-emerald-300'
@@ -732,59 +751,45 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         }`}
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wider ${
-                                req.status === 'pending'
-                                  ? 'bg-amber-200 text-amber-900'
-                                  : req.status === 'approved'
-                                  ? 'bg-emerald-200 text-emerald-900'
-                                  : 'bg-rose-200 text-rose-900'
-                              }`}
-                            >
-                              {req.status === 'pending'
-                                ? '⏳ Pending Factory Review'
+                          <span
+                            className={`font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wider ${
+                              req.status === 'pending_approval'
+                                ? 'bg-amber-200 text-amber-900'
                                 : req.status === 'approved'
-                                ? '✓ Approved & Master Specs Updated'
-                                : '✕ Amendment Rejected'}
-                            </span>
-                            <span className="text-slate-500 font-mono text-[11px]">
-                              Submitted: {new Date(req.requestedAt).toLocaleString()}
-                            </span>
-                          </div>
-                          <div className="text-slate-600 text-[11px]">
-                            Requested by: <strong>{req.requestedBy}</strong> ({req.contactEmail})
-                          </div>
+                                ? 'bg-emerald-200 text-emerald-900'
+                                : 'bg-rose-200 text-rose-900'
+                            }`}
+                          >
+                            {req.status === 'pending_approval'
+                              ? 'Waiting for factory'
+                              : req.status === 'approved'
+                              ? 'Approved'
+                              : 'Declined'}
+                          </span>
+                          <span className="text-slate-500 text-[11px]">
+                            {new Date(req.requestedAt).toLocaleString('en-IN')} • {req.requestedByEmail}
+                          </span>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div className="bg-white/80 p-2.5 rounded-lg border border-slate-200">
-                            <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                              Requested Slit Widths & Cuts:
-                            </span>
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Requested sizes</span>
                             <div className="font-mono font-bold text-slate-900 mt-0.5">
-                              {req.requestedSlitCuts.map((c) => `${c.widthMm}mm × ${c.numberOfCuts} reels`).join(' + ')}
+                              {describeSlitSizes(req.requestedSpecs.slitSizes) ||
+                                (req.requestedSpecs.slitWidthMm ? `${req.requestedSpecs.slitWidthMm} mm` : '—')}
                             </div>
                           </div>
-
                           <div className="bg-white/80 p-2.5 rounded-lg border border-slate-200">
-                            <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                              Customer Reason / Justification:
-                            </span>
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">Reason</span>
                             <p className="text-slate-800 italic mt-0.5">&ldquo;{req.reason}&rdquo;</p>
                           </div>
                         </div>
 
-                        {/* Review Audit Backtrack */}
-                        {req.reviewedBy && (
-                          <div className="mt-2 pt-2 border-t border-slate-300/60 flex flex-wrap items-center justify-between text-[11px] text-slate-700 gap-1">
-                            <div>
-                              <strong>Factory Master Audit:</strong> Reviewed by {req.reviewedBy} on{' '}
-                              {req.reviewedAt ? new Date(req.reviewedAt).toLocaleString() : ''}
-                            </div>
-                            {req.reviewNotes && (
-                              <div className="italic text-slate-600">Note: &ldquo;{req.reviewNotes}&rdquo;</div>
-                            )}
+                        {req.status !== 'pending_approval' && (
+                          <div className="pt-2 border-t border-slate-300/60 text-[11px] text-slate-700">
+                            <strong>Factory reply</strong>
+                            {req.reviewedAt ? ` (${new Date(req.reviewedAt).toLocaleString('en-IN')})` : ''}
+                            {req.reviewNote ? <>: &ldquo;{req.reviewNote}&rdquo;</> : ''}
                           </div>
                         )}
                       </div>
@@ -1024,6 +1029,9 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
         </div>
       )}
 
+      {specRequestJob && (
+        <SpecChangeRequestModal job={specRequestJob} onClose={() => setSpecRequestJob(null)} />
+      )}
     </div>
   );
 };

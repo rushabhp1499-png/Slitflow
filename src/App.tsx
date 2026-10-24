@@ -14,6 +14,7 @@ import { BundleWeighingModal } from './components/BundleWeighingModal';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
 import { CustomerManagementModal } from './components/CustomerManagementModal';
 import { PoCloseModal } from './components/PoCloseModal';
+import { SpecChangeApprovalModal } from './components/SpecChangeApprovalModal';
 import { MaterialInward } from './types';
 import { COMPANY_INFO } from './data/mockData';
 
@@ -220,6 +221,7 @@ function MainAppContent() {
   const [selectedJobForChallan, setSelectedJobForChallan] = useState<MaterialInward | null>(null);
   const [selectedJobForBundleWeighing, setSelectedJobForBundleWeighing] = useState<MaterialInward | null>(null);
   const [selectedJobForPoClose, setSelectedJobForPoClose] = useState<MaterialInward | null>(null);
+  const [selectedJobForSpecApproval, setSelectedJobForSpecApproval] = useState<MaterialInward | null>(null);
 
   const handleOpenChallan = (job: MaterialInward) => {
     setSelectedJobForChallan(job);
@@ -269,6 +271,7 @@ function MainAppContent() {
             onOpenBundleWeighingModal={(job) => setSelectedJobForBundleWeighing(job)}
             onOpenCustomerModal={() => setIsCustomerModalOpen(true)}
             onOpenPoCloseModal={(job) => setSelectedJobForPoClose(job)}
+            onOpenSpecApprovalModal={(job) => setSelectedJobForSpecApproval(job)}
           />
         ) : (
           <CustomerPortal
@@ -295,6 +298,13 @@ function MainAppContent() {
         <PoCloseModal
           job={selectedJobForPoClose}
           onClose={() => setSelectedJobForPoClose(null)}
+        />
+      )}
+
+      {selectedJobForSpecApproval && (
+        <SpecChangeApprovalModal
+          job={selectedJobForSpecApproval}
+          onClose={() => setSelectedJobForSpecApproval(null)}
         />
       )}
 

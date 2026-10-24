@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useProduction } from '../context/ProductionContext';
-import { MaterialInward, RequestedSlitSize } from '../types';
+import { MaterialInward } from '../types';
+import { toScaleKg, formatKg, describeSlitSizes } from '../utils/weight';
+import { SlitSizesEditor, SlitRow, newSlitRow, sizesFromRows, totalKg } from './SlitSizesEditor';
 import {
   PackagePlus,
   X,
@@ -9,9 +11,7 @@ import {
   Scissors,
   AlertCircle,
   PackageCheck,
-  Lock,
-  Plus,
-  Trash2
+  Lock
 } from 'lucide-react';
 
 interface InwardEntryModalProps {
@@ -19,23 +19,6 @@ interface InwardEntryModalProps {
   preselectedCustomerId?: string;
   isCustomerPortal?: boolean;
 }
-
-interface SlitRow {
-  id: string;
-  widthMm: string;
-  quantityKg: string;
-}
-
-const newSlitRow = (): SlitRow => ({
-  id: 'size-' + Math.random().toString(36).substring(2, 8),
-  widthMm: '',
-  quantityKg: '',
-});
-
-// The factory scale's least count is 50 g, so weights are kept in 0.05 kg steps.
-const toScaleKg = (kg: number) => Math.round(kg * 20) / 20;
-const formatKg = (kg: number) =>
-  kg.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
   onClose,
@@ -108,20 +91,12 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
 
   const [formError, setFormError] = useState<string>('');
 
-  const updateSlitRow = (id: string, field: 'widthMm' | 'quantityKg', value: string) => {
-    setSlitRows((rows) => rows.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
-  };
-
-  const validSizes: RequestedSlitSize[] = slitRows
-    .filter((r) => Number(r.widthMm) > 0 && toScaleKg(Number(r.quantityKg)) > 0)
-    .map((r) => ({ id: r.id, widthMm: Number(r.widthMm), quantityKg: toScaleKg(Number(r.quantityKg)) }));
-
+  const validSizes = sizesFromRows(slitRows);
   const widthNum = Number(incomingWidth) || 0;
   const weightNum = toScaleKg(Number(incomingWeight) || 0);
-  const totalSlitKg = toScaleKg(validSizes.reduce((sum, s) => sum + s.quantityKg, 0));
+  const totalSlitKg = totalKg(validSizes);
   const balanceKg = toScaleKg(weightNum - totalSlitKg);
-
-  const slitSummary = validSizes.map((s) => `${s.widthMm} mm – ${formatKg(s.quantityKg)} kg`).join(', ');
+  const slitSummary = describeSlitSizes(validSizes);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -415,77 +390,7 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
               Add each width you need and how many kg of that width (in steps of 50 g).
             </p>
 
-            <div className="space-y-2">
-              <div className="grid grid-cols-[1fr_1fr_auto] gap-2 text-[11px] font-semibold text-slate-600 px-0.5">
-                <span>Slit width (mm)</span>
-                <span>Quantity (kg)</span>
-                <span className="w-8" />
-              </div>
-              {slitRows.map((row) => (
-                <div key={row.id} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
-                  <input
-                    type="number"
-                    step="any"
-                    min={0.1}
-                    value={row.widthMm}
-                    onChange={(e) => updateSlitRow(row.id, 'widthMm', e.target.value)}
-                    placeholder="e.g. 20"
-                    className={`${inputClass} font-bold`}
-                  />
-                  <input
-                    type="number"
-                    min={0.05}
-                    step={0.05}
-                    value={row.quantityKg}
-                    onChange={(e) => updateSlitRow(row.id, 'quantityKg', e.target.value)}
-                    onBlur={(e) => {
-                      const kg = Number(e.target.value);
-                      if (kg > 0) updateSlitRow(row.id, 'quantityKg', toScaleKg(kg).toFixed(2));
-                    }}
-                    placeholder="e.g. 500"
-                    className={`${inputClass} font-bold`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setSlitRows((rows) => (rows.length > 1 ? rows.filter((r) => r.id !== row.id) : rows))}
-                    disabled={slitRows.length === 1}
-                    className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-600 disabled:opacity-30 disabled:hover:text-slate-400"
-                    title="Remove this size"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => setSlitRows((rows) => [...rows, newSlitRow()])}
-                className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:text-blue-900"
-              >
-                <Plus className="w-3.5 h-3.5" /> Add another size
-              </button>
-            </div>
-
-            {validSizes.length > 0 && (
-              <div
-                className={`mt-3 rounded-lg border px-3 py-2 text-xs ${
-                  weightNum > 0 && totalSlitKg > weightNum
-                    ? 'bg-red-50 border-red-200 text-red-900'
-                    : 'bg-blue-50 border-blue-200 text-blue-950'
-                }`}
-              >
-                <span className="font-bold">Total {formatKg(totalSlitKg)} kg</span>
-                {weightNum > 0 && (
-                  <span>
-                    {' '}of {formatKg(weightNum)} kg received
-                    {totalSlitKg > weightNum
-                      ? ' • more than the material received'
-                      : balanceKg > 0
-                      ? ` • ${formatKg(balanceKg)} kg not yet assigned`
-                      : ' • fully assigned'}
-                  </span>
-                )}
-              </div>
-            )}
+            <SlitSizesEditor rows={slitRows} onChange={setSlitRows} availableKg={weightNum} />
 
             <div className="mt-3">
               <label className="block text-xs font-semibold text-slate-700 mb-1">

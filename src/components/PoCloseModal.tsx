@@ -23,7 +23,8 @@ export const PoCloseModal: React.FC<PoCloseModalProps> = ({ job, onClose }) => {
   const [closingNotes, setClosingNotes] = useState(
     `All slitted material delivered in full reconciliation. Inward raw material ${job.incomingWeight} kg fully accounted for. PO permanently closed.`
   );
-  const [closedByName, setClosedByName] = useState('Works Manager (R. K. Sharma)');
+  // Blank means "the signed-in user" (filled in by the data layer).
+  const [closedByName, setClosedByName] = useState('');
   const [confirmed, setConfirmed] = useState(true);
 
   const totalDispatched = job.dispatchedWeightKg || (job.challans?.reduce((acc, c) => acc + c.thisDispatchWeightKg, 0) || 0);
@@ -33,7 +34,7 @@ export const PoCloseModal: React.FC<PoCloseModalProps> = ({ job, onClose }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    closeCustomerPo(job.id, closingNotes, closedByName);
+    closeCustomerPo(job.id, closingNotes, closedByName.trim() || undefined);
     onClose();
   };
 

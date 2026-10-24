@@ -55,8 +55,7 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
 
   const currentJob = jobs.find((j) => j.id === job.id) || job;
   const isPermanentlyClosed =
-    currentJob.status === 'permanently_closed' ||
-    currentJob.status === 'delivered_closed' ||
+    currentJob.status === 'po_closed' ||
     currentJob.poStatus === 'closed';
 
   const customer = customers.find((c) => c.id === currentJob.customerId);
@@ -106,10 +105,9 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
   const newBundlesCount = selectedBundles.length;
 
   const [newVehicleNo, setNewVehicleNo] = useState<string>(job.vehicleNo && job.vehicleNo !== '—' ? job.vehicleNo : '');
-  const [newTransporter, setNewTransporter] = useState<string>('Express Road Lines');
-  const [newEWayBill, setNewEWayBill] = useState<string>(
-    `2419${Math.floor(10000000 + Math.random() * 90000000)}`
-  );
+  const [newTransporter, setNewTransporter] = useState<string>('');
+  // Statutory number: only what the user types, never a generated one.
+  const [newEWayBill, setNewEWayBill] = useState<string>('');
   const [newRemarks, setNewRemarks] = useState<string>('');
 
   // Active Challan for view or edit
@@ -134,13 +132,6 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
   const [editVehicleNo, setEditVehicleNo] = useState<string>(activeChallan?.vehicleNo || '');
   const [editTransporter, setEditTransporter] = useState<string>(activeChallan?.transporterName || '');
   const [editEWayBill, setEditEWayBill] = useState<string>(activeChallan?.eWayBillNo || '');
-
-  // Auto-stage floor bundles if job doesn't have any bundles yet
-  useEffect(() => {
-    if (!job.bundles || job.bundles.length === 0) {
-      handleAutoStageBundles();
-    }
-  }, [job.id]);
 
   useEffect(() => {
     if (readyBundles.length > 0 && selectedBundleIds.length === 0 && !isCreatingNew) {
@@ -177,42 +168,6 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
   const selectFirstNBundles = (n: number) => {
     const subset = readyBundles.slice(0, n);
     setSelectedBundleIds(subset.map((b) => b.id));
-  };
-
-  // Auto-generate floor bundles if job doesn't have any bundles yet
-  const handleAutoStageBundles = () => {
-    const targetWeight = balanceRemaining > 0 ? balanceRemaining : job.incomingWeight;
-    const avgNet = 27.50; // kg net
-    const count = Math.max(1, Math.round(targetWeight / avgNet));
-    const tarePerBundle = 1.20; // kg paper core
-    const bundlesToCreate = Array.from({ length: count }, (_, idx) => {
-      const isLast = idx === count - 1;
-      const netKg = isLast
-        ? Number((targetWeight - avgNet * (count - 1)).toFixed(2))
-        : avgNet;
-      const grossKg = Number((netKg + tarePerBundle).toFixed(2));
-      const bNum = (job.bundles?.length || 0) + idx + 1;
-      return {
-        rollItems: [
-          {
-            rollNumber: 1,
-            widthMm: job.outputDetails?.slittedWidthsMm ? parseFloat(job.outputDetails.slittedWidthsMm) : 20,
-            grossWeightKg: grossKg,
-            netWeightKg: netKg,
-          },
-        ],
-        rollsSummary: `10 coils (${job.thickness}${job.thicknessUnit} precision slitted)`,
-        totalRollsCount: 10,
-        grossWeightKg: grossKg,
-        coreType: 'paper_core' as const,
-        paperCoreTareWeightKg: tarePerBundle,
-        netWeightKg: netKg,
-        weighedBy: 'Dock Scale Operator',
-        notes: `Precision Slitter Bundle #${bNum}`,
-      };
-    });
-    const created = addMultipleBundlesToJob(job.id, bundlesToCreate);
-    setSelectedBundleIds(created.map((b) => b.id));
   };
 
   // Toggle bundle selection when editing an existing challan
@@ -848,17 +803,9 @@ Phone: +91 98200 45678`;
                       <p className="text-xs font-bold text-slate-800 mb-1">
                         No physical floor bundles are currently logged for this job
                       </p>
-                      <p className="text-[11px] text-slate-500 mb-3 max-w-md mx-auto">
-                        You can manually enter weights below, or generate floor bundles from the balance weight to enable individual bundle tick-mark selection.
+                      <p className="text-[11px] text-slate-500 max-w-md mx-auto">
+                        Weigh the bundles first with "Add Bundle Details" on the order, then make the challan. A challan only lists bundles that were actually weighed.
                       </p>
-                      <button
-                        type="button"
-                        onClick={handleAutoStageBundles}
-                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs"
-                      >
-                        <Sparkles className="w-4 h-4" />
-                        <span>⚡ Auto-Stage Floor Bundles from Balance (~28 kg bundles)</span>
-                      </button>
                     </div>
                   )}
                 </div>
@@ -1356,12 +1303,12 @@ Phone: +91 98200 45678`;
                     <p className="text-slate-600 mt-1">
                       Delivery Address:{' '}
                       <span className="font-medium text-slate-800">
-                        {activeChallan.customerDeliveryAddress || customer?.deliveryPlantAddress || customer?.registeredOffice || 'Pune MIDC'}
+                        {activeChallan.customerDeliveryAddress || customer?.plantAddress || customer?.registeredAddress || '—'}
                       </span>
                     </p>
                     <p className="text-slate-600 mt-0.5">
                       Customer GSTIN:{' '}
-                      <strong className="font-mono text-slate-900">{activeChallan.customerGst || customer?.gstin || '27AABCU9603R1ZM'}</strong>
+                      <strong className="font-mono text-slate-900">{activeChallan.customerGst || customer?.gstNumber || '—'}</strong>
                     </p>
                     <p className="text-slate-600 mt-0.5">
                       Customer PO No:{' '}
@@ -1428,7 +1375,11 @@ Phone: +91 98200 45678`;
                         <td className="py-3 px-3">
                           <span className="font-semibold text-slate-800">{job.grade}</span>
                           <span className="text-slate-500 block text-[11px]">
-                            {job.thickness}{job.thicknessUnit} • Width: {job.outputDetails?.slittedWidthsMm ? `${job.outputDetails.slittedWidthsMm}mm` : `${job.incomingWidth}mm`}
+                            {job.thickness}{job.thicknessUnit} • Width: {job.outputDetails?.slitCuts?.length
+                              ? job.outputDetails.slitCuts.map((c) => `${c.widthMm}mm`).join(', ')
+                              : job.requestedSlitSizes?.length
+                              ? job.requestedSlitSizes.map((s) => `${s.widthMm}mm`).join(', ')
+                              : `${job.incomingWidth}mm`}
                           </span>
                         </td>
                         <td className="py-3 px-3 text-right font-mono font-bold text-slate-800">

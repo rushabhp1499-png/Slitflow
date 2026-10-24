@@ -239,14 +239,16 @@ export interface SpecChangeRequest {
   requestedByEmail: string;
   requestedAt: string;
   originalSpecs: {
-    slitWidthMm?: number;
+    slitSizes?: RequestedSlitSize[];
+    slitWidthMm?: number; // older requests only
     targetBundleWeightKg?: number;
     unitsPerBundle?: number;
     unitType?: 'reels' | 'reams';
     customerInstructions: string;
   };
   requestedSpecs: {
-    slitWidthMm?: number;
+    slitSizes?: RequestedSlitSize[];
+    slitWidthMm?: number; // older requests only
     targetBundleWeightKg?: number;
     unitsPerBundle?: number;
     unitType?: 'reels' | 'reams';
