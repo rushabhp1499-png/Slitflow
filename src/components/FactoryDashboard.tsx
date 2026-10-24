@@ -81,6 +81,39 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
      (j.bundles && j.bundles.some(b => b.status === 'ready')) ||
      (j.status === 'partially_dispatched' && (j.remainingWeightKg || 0) > 0)) && !isJobClosed(j);
 
+  // "Today" view: what needs attention now. Dates compared in local time.
+  const localDay = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const today = localDay(new Date());
+  const tomorrow = localDay(new Date(Date.now() + 24 * 60 * 60 * 1000));
+  const hasBalance = (j: MaterialInward) =>
+    !isJobClosed(j) && j.status !== 'dispatched' && (j.remainingWeightKg ?? j.incomingWeight) > 0;
+  const todayChecks: Record<string, (j: MaterialInward) => boolean> = {
+    TODAY_IN: (j) => !!j.createdAt && localDay(new Date(j.createdAt)) === today,
+    OVERDUE: (j) => hasBalance(j) && !!j.estimatedDeliveryDate && j.estimatedDeliveryDate < today,
+    DUE_SOON: (j) =>
+      hasBalance(j) && !!j.estimatedDeliveryDate && j.estimatedDeliveryDate >= today && j.estimatedDeliveryDate <= tomorrow,
+    READY_BUNDLES: (j) => !isJobClosed(j) && (j.bundles || []).some((b) => b.status === 'ready' && !b.isVoided),
+    NEEDS_EDD: (j) => !j.estimatedDeliveryDate && !isJobClosed(j),
+    CHANGE_REQ: (j) => (j.specChangeRequests || []).some((r) => r.status === 'pending_approval'),
+  };
+  const todayCards: Array<{ key: string; label: string; tone: string }> = [
+    { key: 'OVERDUE', label: 'Overdue', tone: 'red' },
+    { key: 'DUE_SOON', label: 'Due today / tomorrow', tone: 'amber' },
+    { key: 'READY_BUNDLES', label: 'Packed, ready to dispatch', tone: 'emerald' },
+    { key: 'CHANGE_REQ', label: 'Change requests', tone: 'purple' },
+    { key: 'NEEDS_EDD', label: 'Need a delivery date', tone: 'blue' },
+    { key: 'TODAY_IN', label: 'Came in today', tone: 'slate' },
+  ];
+  const toneClasses: Record<string, string> = {
+    red: 'border-red-200 bg-red-50 text-red-900',
+    amber: 'border-amber-200 bg-amber-50 text-amber-900',
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    purple: 'border-purple-200 bg-purple-50 text-purple-900',
+    blue: 'border-blue-200 bg-blue-50 text-blue-900',
+    slate: 'border-slate-200 bg-white text-slate-900',
+  };
+
   // Metrics calculation
   const totalInwardCount = jobs.length;
   const pendingEddCount = jobs.filter((j) => !j.estimatedDeliveryDate && !isJobClosed(j)).length;
@@ -120,6 +153,8 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
     const matchesStatus =
       statusFilter === 'ALL'
         ? true
+        : todayChecks[statusFilter]
+        ? todayChecks[statusFilter](job)
         : statusFilter === 'IN_QUEUE'
         ? isJobInQueue(job)
         : statusFilter === 'UNDER_SLITTING'
@@ -210,6 +245,48 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
         </div>
       </div>
       
+      {/* Today: what needs attention now. Click a card to list those orders. */}
+      <div>
+        <div className="flex items-center justify-between mb-2 px-0.5">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
+            Today • {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })}
+          </span>
+          {statusFilter !== 'ALL' && (
+            <button type="button" onClick={() => setStatusFilter('ALL')} className="text-xs font-bold text-blue-700">
+              Show all orders
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
+          {todayCards.map((card) => {
+            const matching = jobs.filter(todayChecks[card.key]);
+            const active = statusFilter === card.key;
+            return (
+              <button
+                key={card.key}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(active ? 'ALL' : card.key);
+                  document.getElementById('orders-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+                className={`text-left rounded-xl border p-3 transition ${toneClasses[card.tone]} ${
+                  active ? 'ring-2 ring-blue-500' : 'hover:shadow-sm'
+                } ${matching.length === 0 ? 'opacity-60' : ''}`}
+              >
+                <div className="text-2xl font-black leading-none">{matching.length}</div>
+                <div className="text-[11px] font-bold mt-1">{card.label}</div>
+                {matching.length > 0 && (
+                  <div className="text-[10px] font-mono mt-1 truncate opacity-80">
+                    {matching.slice(0, 3).map((j) => j.customerPoNo).join(', ')}
+                    {matching.length > 3 ? ` +${matching.length - 3}` : ''}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Top Banner & KPI Stat Cards - Clickable Interactive Filter Buttons */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         
@@ -478,7 +555,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
       </div>
 
       {/* Jobs Master Table */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-2xs overflow-hidden">
+      <div id="orders-table" className="bg-white border border-slate-200 rounded-xl shadow-2xs overflow-hidden scroll-mt-20">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs divide-y divide-slate-200">
             <thead className="bg-slate-50 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
