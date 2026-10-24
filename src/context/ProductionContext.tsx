@@ -270,6 +270,44 @@ const readLegacyData = (): { jobs: MaterialInward[]; customers: Customer[] } | n
   }
 };
 
+// Bundle ids on a challan (newer challans store selectedBundleIds; older ones only dispatchedBundles).
+const challanBundleIds = (c: DeliveryChallan): string[] =>
+  c.selectedBundleIds && c.selectedBundleIds.length > 0
+    ? c.selectedBundleIds
+    : (c.dispatchedBundles || []).map(b => b.id);
+
+// Bundle id -> the active (not superseded) challan it is on. If a bundle was wrongly put on
+// several challans, the oldest one wins.
+const activeChallanByBundle = (job: MaterialInward, exceptChallanId?: string) => {
+  const map = new Map<string, DeliveryChallan>();
+  for (const c of job.challans || []) {
+    if (c.isSuperseded || c.id === exceptChallanId) continue;
+    for (const id of challanBundleIds(c)) if (!map.has(id)) map.set(id, c);
+  }
+  return map;
+};
+
+// Recomputes every bundle's ready/dispatched state and the dispatched totals from the
+// challans that remain, so deleting or editing a challan can never leave a bundle wrong.
+const reconcileDispatch = (job: MaterialInward): MaterialInward => {
+  const onChallan = activeChallanByBundle(job);
+  const bundles = (job.bundles || []).map(b => {
+    const c = onChallan.get(b.id);
+    return c
+      ? { ...b, status: 'dispatched' as const, dispatchedInChallanId: c.id, dispatchedInChallanNo: c.challanNo }
+      : { ...b, status: 'ready' as const, dispatchedInChallanId: undefined, dispatchedInChallanNo: undefined };
+  });
+  const dispatched = Number(
+    (job.challans || []).filter(c => !c.isSuperseded).reduce((s, c) => s + (c.thisDispatchWeightKg || 0), 0).toFixed(2)
+  );
+  return {
+    ...job,
+    bundles,
+    dispatchedWeightKg: dispatched,
+    remainingWeightKg: Math.max(0, Number((job.incomingWeight - dispatched).toFixed(2))),
+  };
+};
+
 export const ProductionContext = createContext<ProductionContextType | undefined>(undefined);
 
 export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -1176,12 +1214,23 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       ? job.outputDetails.slitCuts.map(c => `${c.widthMm}mm (${c.numberOfCuts} cuts)`).join(', ')
       : `${job.incomingWidth}mm standard cut`;
 
-    // Process selected bundle records if provided
+    // A challan lists only weighed bundles that are not on any other active challan.
     const allJobBundles = job.bundles || [];
-    const selectedBundleIds = params.selectedBundleIds && params.selectedBundleIds.length > 0
-      ? params.selectedBundleIds
-      : [];
-    
+    const selectedBundleIds = Array.from(new Set(params.selectedBundleIds || []));
+    if (selectedBundleIds.length === 0) {
+      throw new Error('Tick at least one weighed bundle for this challan.');
+    }
+    const onChallan = activeChallanByBundle(job);
+    const unavailable = selectedBundleIds
+      .map(id => allJobBundles.find(b => b.id === id))
+      .filter(b => !b || b.isVoided || b.status !== 'ready' || onChallan.has(b.id));
+    if (unavailable.length > 0) {
+      const which = unavailable
+        .map(b => (b ? `${b.bundleTag}${onChallan.get(b.id) ? ` (already on ${onChallan.get(b.id)!.challanNo})` : ''}` : 'a deleted bundle'))
+        .join(', ');
+      throw new Error(`Cannot make this challan: ${which} is not available. Only bundles still on the floor can be dispatched.`);
+    }
+
     const matchedBundles = allJobBundles.filter(b => selectedBundleIds.includes(b.id));
 
     let dispatchWeight = Number(params.thisDispatchWeightKg);
@@ -1521,6 +1570,16 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     updates: Partial<DeliveryChallan>
   ) => {
     const nowIso = new Date().toISOString();
+    if (updates.selectedBundleIds !== undefined) {
+      const job = jobs.find(j => j.id === jobId);
+      const onOther = job ? activeChallanByBundle(job, challanId) : new Map<string, DeliveryChallan>();
+      const clash = updates.selectedBundleIds.filter(id => onOther.has(id));
+      if (clash.length > 0) {
+        const tags = clash.map(id => job?.bundles?.find(b => b.id === id)?.bundleTag || id).join(', ');
+        reportSyncError(`Not saved: ${tags} already on another challan. A bundle can only be dispatched once.`);
+        return;
+      }
+    }
     setJobs(prev =>
       prev.map(job => {
         if (job.id !== jobId) return job;
@@ -1558,44 +1617,13 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           return updated;
         });
 
-        // Reconcile job bundles if selectedBundleIds was updated
-        let updatedBundles = job.bundles;
-        if (updates.selectedBundleIds !== undefined) {
-          const selectedSet = new Set(updates.selectedBundleIds);
-          updatedBundles = (job.bundles || []).map(b => {
-            if (selectedSet.has(b.id)) {
-              return {
-                ...b,
-                status: 'dispatched' as const,
-                dispatchedInChallanId: challanId,
-                dispatchedInChallanNo: targetChallanNo || b.dispatchedInChallanNo,
-              };
-            } else if (b.dispatchedInChallanId === challanId) {
-              // Unchecked bundle - return to shop floor
-              return {
-                ...b,
-                status: 'ready' as const,
-                dispatchedInChallanId: undefined,
-                dispatchedInChallanNo: undefined,
-              };
-            }
-            return b;
-          });
-        }
-
-        const newTotalDispatched = challans.reduce((sum, c) => sum + (c.thisDispatchWeightKg || 0), 0);
-        const newRemaining = Math.max(0, job.incomingWeight - newTotalDispatched);
-        const latestChallan = challans[challans.length - 1];
-
-        return {
+        // Bundle states and totals follow from the challans as they now stand.
+        return reconcileDispatch({
           ...job,
           challans,
-          challan: latestChallan,
-          bundles: updatedBundles,
-          dispatchedWeightKg: newTotalDispatched,
-          remainingWeightKg: newRemaining,
+          challan: challans[challans.length - 1],
           updatedAt: nowIso,
-        };
+        });
       })
     );
 
@@ -1619,21 +1647,11 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         if (!targetChallan) return job;
 
         const updatedChallans = (job.challans || []).filter(c => c.id !== challanId);
-        const newTotalDispatched = updatedChallans.reduce((sum, c) => sum + (c.thisDispatchWeightKg || 0), 0);
-        const newRemaining = Math.max(0, job.incomingWeight - newTotalDispatched);
-
-        // Restore bundles that were dispatched with this challan
-        const updatedBundles = (job.bundles || []).map(b => {
-          if (b.dispatchedInChallanId === challanId) {
-            return {
-              ...b,
-              status: 'ready' as const,
-              dispatchedInChallanId: undefined,
-              dispatchedInChallanNo: undefined,
-            };
-          }
-          return b;
-        });
+        // A bundle goes back to the floor only if no remaining challan still lists it.
+        const reconciled = reconcileDispatch({ ...job, challans: updatedChallans });
+        const newTotalDispatched = reconciled.dispatchedWeightKg;
+        const newRemaining = reconciled.remainingWeightKg;
+        const updatedBundles = reconciled.bundles;
 
         const newStatus: ProductionStatus =
           newTotalDispatched > 0

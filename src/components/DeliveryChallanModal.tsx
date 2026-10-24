@@ -7,6 +7,7 @@ import { downloadChallanPdf } from '../utils/challanExport';
 import { WhatsAppDispatchModal } from './WhatsAppDispatchModal';
 import { EmailDispatchModal } from './EmailDispatchModal';
 import {
+  AlertCircle,
   Printer,
   X,
   FileText,
@@ -41,7 +42,7 @@ interface DeliveryChallanModalProps {
   onClose: () => void;
 }
 
-export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job, onClose }) => {
+export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job: jobWhenOpened, onClose }) => {
   const {
     jobs,
     reopenCustomerPo,
@@ -51,10 +52,12 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
     deleteDeliveryChallan,
     sendChallanEmail,
     customers,
-    addMultipleBundlesToJob,
   } = useProduction();
 
-  const currentJob = jobs.find((j) => j.id === job.id) || job;
+  // Always work from the live order, never the copy taken when this window opened:
+  // after a challan is made its bundles must immediately stop showing as ready.
+  const job = jobs.find((j) => j.id === jobWhenOpened.id) || jobWhenOpened;
+  const currentJob = job;
   const isPermanentlyClosed =
     currentJob.status === 'po_closed' ||
     currentJob.poStatus === 'closed';
@@ -66,6 +69,27 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
       : currentJob.challan
       ? [currentJob.challan]
       : [];
+
+  // Challans that repeat a bundle already on an earlier active challan (made before this was
+  // blocked). They are flagged so they can be deleted.
+  const duplicateOf = new Map<string, { tags: string; firstNo: string }>();
+  {
+    const firstSeen = new Map<string, DeliveryChallan>();
+    for (const c of existingChallans) {
+      if (c.isSuperseded) continue;
+      const ids = c.selectedBundleIds?.length ? c.selectedBundleIds : (c.dispatchedBundles || []).map((b) => b.id);
+      const repeats = ids.filter((id) => firstSeen.has(id));
+      if (repeats.length > 0) {
+        duplicateOf.set(c.id, {
+          tags: repeats.map((id) => job.bundles?.find((b) => b.id === id)?.bundleTag || id).join(', '),
+          firstNo: firstSeen.get(repeats[0])!.challanNo,
+        });
+      }
+      ids.forEach((id) => {
+        if (!firstSeen.has(id)) firstSeen.set(id, c);
+      });
+    }
+  }
 
   const [activeChallanId, setActiveChallanId] = useState<string>(
     existingChallans[existingChallans.length - 1]?.id || ''
@@ -91,8 +115,8 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
   const dispatchedSoFar = job.dispatchedWeightKg || 0;
   const balanceRemaining = Math.max(0, job.incomingWeight - dispatchedSoFar);
 
-  // Bundles ready on scale
-  const readyBundles = (job.bundles || []).filter((b) => b.status === 'ready');
+  // Bundles weighed and not yet on any challan
+  const readyBundles = (job.bundles || []).filter((b) => b.status === 'ready' && !b.isVoided);
   const readyWeight = Number(readyBundles.reduce((s, b) => s + b.netWeightKg, 0).toFixed(2));
 
   // Selected bundle IDs for new challan
@@ -134,11 +158,21 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
   const [editTransporter, setEditTransporter] = useState<string>(activeChallan?.transporterName || '');
   const [editEWayBill, setEditEWayBill] = useState<string>(activeChallan?.eWayBillNo || '');
 
+  // Keep the ticks in step with the live list: drop bundles that are no longer ready
+  // (e.g. just put on a challan) and tick newly weighed ones.
+  const readyKey = readyBundles.map((b) => b.id).join(',');
+  const [prevReadyKey, setPrevReadyKey] = useState(readyKey);
   useEffect(() => {
-    if (readyBundles.length > 0 && selectedBundleIds.length === 0 && !isCreatingNew) {
-      setSelectedBundleIds(readyBundles.map((b) => b.id));
-    }
-  }, [job.bundles]);
+    if (readyKey === prevReadyKey) return;
+    const previous = new Set(prevReadyKey.split(',').filter(Boolean));
+    setSelectedBundleIds((sel) => [
+      ...sel.filter((id) => readyBundles.some((b) => b.id === id)),
+      ...readyBundles.filter((b) => !previous.has(b.id)).map((b) => b.id),
+    ]);
+    setPrevReadyKey(readyKey);
+  }, [readyKey]);
+
+  const [createError, setCreateError] = useState<string>('');
 
   // Toggle individual bundle checkbox for new challan
   const toggleBundleSelection = (bundleId: string) => {
@@ -208,23 +242,32 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job,
 
   const handleCreateNewChallan = (e: React.FormEvent) => {
     e.preventDefault();
-    if (newDispatchWeight <= 0) return;
+    setCreateError('');
+    if (newDispatchWeight <= 0 || selectedBundles.length === 0) {
+      setCreateError('Tick at least one weighed bundle for this challan.');
+      return;
+    }
 
     const isPartial = newDispatchWeight < balanceRemaining;
 
-    const created = generateDeliveryChallan(job.id, {
-      dispatchType: isPartial ? 'partial' : 'final',
-      thisDispatchWeightKg: newDispatchWeight,
-      bundlesCount: newBundlesCount,
-      vehicleNo: (newVehicleNo && newVehicleNo.trim()) ? newVehicleNo.trim().toUpperCase() : (job.vehicleNo || '—'),
-      transporterName: newTransporter,
-      eWayBillNo: newEWayBill,
-      selectedBundleIds: selectedBundleIds,
-      remarks: newRemarks || `Dispatch of ${newDispatchWeight} kg in ${newBundlesCount} bundles for PO #${job.customerPoNo}`,
-    });
-
-    setActiveChallanId(created.id);
-    setIsCreatingNew(false);
+    try {
+      const created = generateDeliveryChallan(job.id, {
+        dispatchType: isPartial ? 'partial' : 'final',
+        thisDispatchWeightKg: newDispatchWeight,
+        bundlesCount: newBundlesCount,
+        vehicleNo: (newVehicleNo && newVehicleNo.trim()) ? newVehicleNo.trim().toUpperCase() : (job.vehicleNo || '—'),
+        transporterName: newTransporter,
+        eWayBillNo: newEWayBill,
+        // Only bundles that are still ready right now
+        selectedBundleIds: selectedBundles.map((b) => b.id),
+        remarks: newRemarks || `Dispatch of ${newDispatchWeight} kg in ${newBundlesCount} bundles for PO #${job.customerPoNo}`,
+      });
+      setSelectedBundleIds([]);
+      setActiveChallanId(created.id);
+      setIsCreatingNew(false);
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : String(err));
+    }
   };
 
   const handleDeleteChallan = (challanId: string) => {
@@ -408,12 +451,17 @@ ${companyContactLine()}`;
                     type="button"
                     onClick={() => handleSelectChallan(ch.id)}
                     className={`px-2.5 py-1 rounded text-xs font-mono font-bold transition ${
-                      activeChallanId === ch.id
+                      duplicateOf.has(ch.id)
+                        ? activeChallanId === ch.id
+                          ? 'bg-red-600 text-white'
+                          : 'text-red-400 hover:text-red-200'
+                        : activeChallanId === ch.id
                         ? 'bg-blue-600 text-white shadow-xs'
                         : 'text-slate-400 hover:text-white'
                     }`}
+                    title={duplicateOf.has(ch.id) ? 'Duplicate: repeats a bundle already dispatched. Delete this challan.' : undefined}
                   >
-                    DC #{idx + 1}
+                    {duplicateOf.has(ch.id) ? '⚠ ' : ''}DC #{idx + 1}
                   </button>
                 ))}
               </div>
@@ -809,6 +857,13 @@ ${companyContactLine()}`;
                   </div>
                 </div>
 
+                {createError && (
+                  <div className="text-xs text-red-900 bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                    <span>{createError}</span>
+                  </div>
+                )}
+
                 <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
                   {existingChallans.length > 0 && (
                     <button
@@ -958,6 +1013,17 @@ ${companyContactLine()}`;
                   )}
                 </div>
               </div>
+
+              {duplicateOf.has(activeChallan.id) && (
+                <div className="no-print bg-red-50 border border-red-300 text-red-900 px-4 py-3 rounded-xl text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Duplicate challan.</strong> {duplicateOf.get(activeChallan.id)!.tags} was already dispatched on{' '}
+                    {duplicateOf.get(activeChallan.id)!.firstNo}. This challan should not exist: use the bin icon above to
+                    delete it. The bundle stays on {duplicateOf.get(activeChallan.id)!.firstNo}.
+                  </span>
+                </div>
+              )}
 
               {/* Real-time Dispatch Feedback Banner */}
               {emailAlert && (

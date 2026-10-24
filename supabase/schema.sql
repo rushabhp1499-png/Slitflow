@@ -131,6 +131,30 @@ create trigger customers_after_update
 after update on public.customers
 for each row execute function public.customers_after_update();
 
+-- How many times bundles appear on more than one active (not superseded) challan
+-- of an order. Used to stop the same bundle being dispatched twice.
+create or replace function public.challan_bundle_duplicates(d jsonb)
+returns integer
+language sql immutable
+as $$
+  select coalesce(sum(n - 1), 0)::int
+  from (
+    select count(*) as n
+    from jsonb_array_elements(coalesce(d -> 'challans', '[]'::jsonb)) c,
+         jsonb_array_elements_text(
+           case
+             when jsonb_typeof(c -> 'selectedBundleIds') = 'array' and jsonb_array_length(c -> 'selectedBundleIds') > 0
+               then c -> 'selectedBundleIds'
+             else coalesce(
+               (select jsonb_agg(b -> 'id') from jsonb_array_elements(coalesce(c -> 'dispatchedBundles', '[]'::jsonb)) b),
+               '[]'::jsonb)
+           end
+         ) bid
+    where coalesce((c ->> 'isSuperseded')::boolean, false) = false
+    group by bid
+  ) x;
+$$;
+
 -- Assigns job numbers on the server (so two people can never get the same
 -- number) and stops customers from submitting anything except a fresh order.
 create or replace function public.jobs_before_write()
@@ -227,6 +251,12 @@ begin
 
   -- UPDATE: the id and job number can never change.
   new.data := new.data || jsonb_build_object('id', old.id, 'jobNo', old.data -> 'jobNo');
+
+  -- A bundle may be on only one active challan. Compared with the old version so that
+  -- cleaning up existing duplicates (deleting extra challans) is still allowed.
+  if public.challan_bundle_duplicates(new.data) > public.challan_bundle_duplicates(old.data) then
+    raise exception 'A bundle is already on another challan. Each bundle can only be dispatched once.';
+  end if;
   return new;
 end;
 $$;
