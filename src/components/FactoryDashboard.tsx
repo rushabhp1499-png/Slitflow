@@ -173,6 +173,19 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             </button>
           )}
 
+          {/* SlitSmart Size Master (separate site) for planning cuts on jobs the factory creates */}
+          <a
+            href="https://slitflow.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold transition cursor-pointer"
+            title="Open SlitSmart Size Master in a new tab to plan blade setup and cutting options"
+          >
+            <Scissors className="w-3.5 h-3.5 text-amber-400" />
+            <span>Size Master</span>
+            <ExternalLink className="w-3 h-3 text-slate-400" />
+          </a>
+
           {/* New Material Inward */}
           <button
             type="button"
