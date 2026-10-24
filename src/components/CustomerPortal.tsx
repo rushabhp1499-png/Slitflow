@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { downloadChallanAsHtml } from '../utils/challanExport';
 import { describeSlitSizes } from '../utils/weight';
+import { buildTimeline, nextStep, formatEventTime } from '../utils/timeline';
 import { SpecChangeRequestModal } from './SpecChangeRequestModal';
 
 interface CustomerPortalProps {
@@ -133,6 +134,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
       case 'slitting_completed':
         return 2; // Step 3: Slitting & Bundling
       case 'ready_for_dispatch':
+      case 'partially_dispatched':
       case 'dispatched':
       case 'po_closed':
         return 3; // Clubbed Step 5 & 6
@@ -203,7 +205,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                 )}
               </div>
               <p className="text-xs text-slate-500 font-mono mt-0.5">
-                GSTIN: {currentCustomer.gstNumber} • Access Code: {currentCustomer.accessCode}
+                {currentCustomer.gstNumber ? `GSTIN: ${currentCustomer.gstNumber}` : ''}
               </p>
             </div>
           </div>
@@ -271,7 +273,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
               ))}
             </div>
             <p className="text-[10px] text-slate-400 mt-1">
-              All listed email IDs receive automated real-time dispatch alerts and challan PDFs.
+              Each of these email IDs can sign in and track your orders.
             </p>
           </div>
         </div>
@@ -301,10 +303,14 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
                 Your Orders & Batches ({customerJobs.length})
               </span>
-              <span className="text-[11px] text-blue-600">Click to track</span>
+              <span className="text-[11px] text-blue-600">
+                <span className="lg:hidden">Swipe and tap to track</span>
+                <span className="hidden lg:inline">Click to track</span>
+              </span>
             </div>
 
-            <div className="space-y-2">
+            {/* Phones: one swipeable row. Desktop: a vertical list beside the details. */}
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 snap-x lg:block lg:space-y-2 lg:overflow-visible lg:mx-0 lg:px-0">
               {customerJobs.map((job) => {
                 const isSelected = activeJob?.id === job.id;
                 const isClosed = job.poStatus === 'closed' || job.status === 'po_closed';
@@ -312,7 +318,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   <div
                     key={job.id}
                     onClick={() => setSelectedJobId(job.id)}
-                    className={`p-3.5 rounded-xl border transition cursor-pointer text-left ${
+                    className={`shrink-0 w-[78%] sm:w-[48%] lg:w-auto snap-start p-3.5 rounded-xl border transition cursor-pointer text-left ${
                       isSelected
                         ? 'bg-blue-50/80 border-blue-300 shadow-sm ring-1 ring-blue-500/20'
                         : 'bg-white hover:bg-slate-50 border-slate-200 shadow-2xs'
@@ -320,14 +326,10 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-xs text-slate-900">
-                            {job.jobNo}
-                          </span>
-                          <span className="font-mono text-[11px] text-blue-700 font-bold">
-                            PO #{job.customerPoNo}
-                          </span>
-                        </div>
+                        <span className="font-mono font-bold text-xs text-blue-800 block">
+                          PO {job.customerPoNo}
+                        </span>
+                        <span className="font-mono text-[10px] text-slate-500">{job.jobNo}</span>
                         <h4 className="font-bold text-xs text-slate-800 mt-1">{job.grade}</h4>
                       </div>
                       {isClosed ? (
@@ -469,17 +471,14 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         </span>
                         <div className="text-base sm:text-lg font-black text-blue-950">
                           {activeJob.estimatedDeliveryDate
-                            ? new Date(activeJob.estimatedDeliveryDate).toLocaleDateString('en-US', {
+                            ? new Date(activeJob.estimatedDeliveryDate).toLocaleDateString('en-IN', {
                                 weekday: 'short',
                                 year: 'numeric',
                                 month: 'short',
                                 day: 'numeric',
                               })
-                            : 'Factory Planner scheduling machine blade setup'}
+                            : 'To be confirmed by the factory'}
                         </div>
-                        <p className="text-[11px] text-blue-700">
-                          Assigned Line: {activeJob.assignedMachine}
-                        </p>
                       </div>
                     </div>
 
@@ -515,67 +514,74 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   </div>
                 </div>
 
-                {/* 4-Step Live Update */}
+                {/* Progress strip */}
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>Live Update</span>
-                    </label>
+                      Live Status
+                    </span>
                     <span className="text-[11px] text-slate-500 font-medium">
-                      Step {currentStageIndex + 1} of 4: {stages[currentStageIndex]?.label}
+                      Step {currentStageIndex + 1} of {stages.length}
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                    {stages.map((stage, idx) => {
-                      const isPast = idx < currentStageIndex;
-                      const isCurrent = idx === currentStageIndex;
-
-                      return (
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {stages.map((stage, idx) => (
+                      <div key={stage.id} className="min-w-0">
                         <div
-                          key={stage.id}
-                          className={`p-3 rounded-xl border text-left transition ${
-                            isCurrent
-                              ? 'bg-blue-600 text-white border-blue-600 shadow-md ring-2 ring-blue-300'
-                              : isPast
-                              ? 'bg-emerald-50 text-emerald-950 border-emerald-300'
-                              : 'bg-slate-50 text-slate-400 border-slate-200'
+                          className={`h-1.5 rounded-full ${
+                            idx < currentStageIndex || isPermanentlyClosed
+                              ? 'bg-emerald-500'
+                              : idx === currentStageIndex
+                              ? 'bg-blue-600 animate-pulse'
+                              : 'bg-slate-200'
+                          }`}
+                        />
+                        <p
+                          className={`mt-1 text-[10px] sm:text-[11px] leading-tight ${
+                            idx === currentStageIndex ? 'font-bold text-blue-900' : 'text-slate-500'
                           }`}
                         >
-                          <div className="flex items-center justify-between mb-1.5">
-                            <span
-                              className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
-                                isCurrent
-                                  ? 'bg-white/20 text-white'
-                                  : isPast
-                                  ? 'bg-emerald-200/60 text-emerald-800'
-                                  : 'bg-slate-200/60 text-slate-600'
-                              }`}
-                            >
-                              Step {idx + 1}
-                            </span>
-                            {isPast ? (
-                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                            ) : isCurrent ? (
-                              <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
-                            ) : (
-                              <span className="w-2 h-2 rounded-full bg-slate-300" />
-                            )}
-                          </div>
-                          <div className={`text-xs font-extrabold leading-tight ${isCurrent ? 'text-white' : 'text-slate-800'}`}>
-                            {stage.label}
-                          </div>
-                          <div
-                            className={`text-[11px] mt-1 line-clamp-2 ${
-                              isCurrent ? 'text-blue-100' : isPast ? 'text-emerald-700 font-medium' : 'text-slate-400'
-                            }`}
-                          >
-                            {stage.sub}
-                          </div>
-                        </div>
-                      );
-                    })}
+                          {stage.label}
+                        </p>
+                      </div>
+                    ))}
                   </div>
+                </div>
+
+                {/* Dated timeline of everything that happened to this order */}
+                <div className="border-t border-slate-200 pt-3">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block mb-2">
+                    Timeline
+                  </span>
+                  <ol className="relative border-l-2 border-slate-200 ml-1.5 space-y-3">
+                    {buildTimeline(activeJob).map((ev, idx) => (
+                      <li key={idx} className="pl-4 relative">
+                        <span
+                          className={`absolute -left-[7px] top-1 w-3 h-3 rounded-full border-2 border-white ${
+                            ev.tone === 'done'
+                              ? 'bg-emerald-500'
+                              : ev.tone === 'progress'
+                              ? 'bg-blue-600'
+                              : ev.tone === 'warning'
+                              ? 'bg-amber-500'
+                              : 'bg-slate-400'
+                          }`}
+                        />
+                        <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5">
+                          <span className="text-xs font-bold text-slate-900">{ev.title}</span>
+                          <span className="text-[11px] text-slate-500 font-mono shrink-0">{formatEventTime(ev.at)}</span>
+                        </div>
+                        {ev.detail && <p className="text-[11px] text-slate-600 leading-snug">{ev.detail}</p>}
+                      </li>
+                    ))}
+                    {nextStep(activeJob) && (
+                      <li className="pl-4 relative">
+                        <span className="absolute -left-[7px] top-1 w-3 h-3 rounded-full border-2 border-blue-600 bg-white" />
+                        <span className="text-xs font-bold text-blue-800">Next: {nextStep(activeJob)}</span>
+                      </li>
+                    )}
+                  </ol>
                 </div>
 
               </div>
