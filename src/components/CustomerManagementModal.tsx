@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useProduction } from '../context/ProductionContext';
 import { Customer } from '../types';
+import { CustomerOrdersPanel } from './CustomerOrdersPanel';
+import { isOpenOrder } from '../utils/floorPlan';
 import {
   Users,
   Building2,
@@ -41,6 +43,7 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
   const [copiedLink, setCopiedLink] = useState(false);
   const [isAddingCustomer, setIsAddingCustomer] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [tab, setTab] = useState<'orders' | 'details'>('orders');
 
   // New Customer Form State
   const [newCustomerData, setNewCustomerData] = useState({
@@ -200,8 +203,15 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
                     </div>
                     <h4 className="font-bold text-xs text-slate-900 mt-1 line-clamp-1">{c.companyName}</h4>
                     <p className="text-[11px] text-slate-500 line-clamp-1">{c.city}, {c.state}</p>
-                    <div className="text-[10px] text-slate-400 font-mono mt-1">
-                      GST: {c.gstNumber}
+                    <div className="text-[10px] mt-1">
+                      {(() => {
+                        const pendingCount = jobs.filter((j) => j.customerId === c.id && isOpenOrder(j)).length;
+                        return pendingCount > 0 ? (
+                          <span className="font-bold text-amber-700">{pendingCount} pending PO{pendingCount > 1 ? 's' : ''}</span>
+                        ) : (
+                          <span className="text-slate-400">No pending POs</span>
+                        );
+                      })()}
                     </div>
                   </div>
                 );
@@ -324,9 +334,34 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
                 </div>
               </form>
             ) : selectedCustomer && editForm ? (
-              /* View & Edit Customer Details */
-              <div className="space-y-6">
-                
+              /* Customer: orders first, then contact details & portal access */
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-end justify-between gap-2 border-b border-slate-200">
+                  <h4 className="font-extrabold text-base text-slate-900 pb-2 truncate">{selectedCustomer.companyName}</h4>
+                  <div className="flex text-xs font-bold">
+                    {([
+                      ['orders', `Orders (${customerJobsCount})`],
+                      ['details', 'Details & Access'],
+                    ] as const).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setTab(key)}
+                        className={`px-3 py-2 border-b-2 -mb-px ${
+                          tab === key ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {tab === 'orders' ? (
+                  <CustomerOrdersPanel customer={selectedCustomer} />
+                ) : (
+                <div className="space-y-6">
+
                 {/* Top Quick Actions Bar */}
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50/40 border border-blue-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <div>
@@ -539,6 +574,8 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
                   </div>
                 </form>
 
+                </div>
+                )}
               </div>
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-center gap-3 py-16">

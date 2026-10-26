@@ -1,7 +1,7 @@
 import { FloorStaff, Machine, MaterialInward, ProductionStatus } from '../types';
 import { challanBundles } from './challanExport';
 
-const STATUS_LABEL: Record<ProductionStatus, string> = {
+export const STATUS_LABEL: Record<ProductionStatus, string> = {
   received: 'Received',
   pending_production: 'In queue',
   in_production: 'Under slitting',
