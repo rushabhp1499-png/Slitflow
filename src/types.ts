@@ -53,6 +53,7 @@ export interface Machine {
   number: string; // e.g. "M-01", shown big on the Live Floor screen
   name: string; // e.g. "Film slitter 1600 mm"
   notes?: string;
+  expectedKgPerHour?: number; // standard output while running, for speed efficiency (from the slitting cost app)
   active: boolean;
 }
 
@@ -326,7 +327,8 @@ export interface MaterialInward {
   // Production Tracking
   status: ProductionStatus;
   assignedMachine: string;
-  assignment?: JobAssignment; // machine / operator / helpers, if the factory assigned them
+  assignment?: JobAssignment; // machine / operator, if the factory assigned them
+  productionStartedAt?: string; // first Start Slit (ISO time)
   estimatedDeliveryDate?: string; // YYYY-MM-DD
   eddHistory: EddHistoryEntry[];
 

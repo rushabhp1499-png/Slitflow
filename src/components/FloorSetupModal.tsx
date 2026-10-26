@@ -63,6 +63,7 @@ export const FloorSetupModal: React.FC<FloorSetupModalProps> = ({ onClose }) => 
       number,
       name: (machineForm.name || '').trim(),
       notes: (machineForm.notes || '').trim(),
+      expectedKgPerHour: machineForm.expectedKgPerHour && machineForm.expectedKgPerHour > 0 ? machineForm.expectedKgPerHour : undefined,
       active: machineForm.active ?? true,
     });
     setMachineForm({ number: '', name: '', notes: '', active: true });
@@ -135,7 +136,7 @@ export const FloorSetupModal: React.FC<FloorSetupModalProps> = ({ onClose }) => 
 
               {tab === 'machines' ? (
                 <>
-                  <form onSubmit={submitMachine} className="grid grid-cols-2 sm:grid-cols-[110px_1fr_1fr_auto] gap-2 items-end bg-slate-50 p-3 rounded-xl border border-slate-200">
+                  <form onSubmit={submitMachine} className="grid grid-cols-2 sm:grid-cols-[100px_1fr_1fr_110px_auto] gap-2 items-end bg-slate-50 p-3 rounded-xl border border-slate-200">
                     <div>
                       <label className="block text-[11px] font-semibold text-slate-600 mb-1">Number *</label>
                       <input value={machineForm.number || ''} onChange={(e) => setMachineForm({ ...machineForm, number: e.target.value })} placeholder="M-01" className={inputClass} />
@@ -147,6 +148,20 @@ export const FloorSetupModal: React.FC<FloorSetupModalProps> = ({ onClose }) => 
                     <div className="col-span-2 sm:col-span-1">
                       <label className="block text-[11px] font-semibold text-slate-600 mb-1">Notes</label>
                       <input value={machineForm.notes || ''} onChange={(e) => setMachineForm({ ...machineForm, notes: e.target.value })} className={inputClass} />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 mb-1" title="Normal output while running, used for speed efficiency">
+                        Std. kg / hour
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={machineForm.expectedKgPerHour ?? ''}
+                        onChange={(e) => setMachineForm({ ...machineForm, expectedKgPerHour: e.target.value === '' ? undefined : Number(e.target.value) })}
+                        placeholder="e.g. 120"
+                        className={inputClass}
+                      />
                     </div>
                     <button type="submit" className="col-span-2 sm:col-span-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1">
                       {machineForm.id ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
@@ -162,6 +177,7 @@ export const FloorSetupModal: React.FC<FloorSetupModalProps> = ({ onClose }) => 
                         <div key={m.id} className={`flex items-center gap-3 px-3 py-2 text-xs ${m.active ? '' : 'opacity-50'}`}>
                           <span className="font-mono font-black text-slate-900 w-16">{m.number}</span>
                           <span className="flex-1 text-slate-700">{m.name || '—'}{m.notes ? ` • ${m.notes}` : ''}</span>
+                          <span className="text-slate-500 font-mono">{m.expectedKgPerHour ? `${m.expectedKgPerHour} kg/h` : 'no std.'}</span>
                           <button onClick={() => setMachineForm(m)} className="p-1 text-slate-500 hover:text-blue-700" title="Edit">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>

@@ -1114,6 +1114,8 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         const updated = {
           ...job,
           status,
+          // First Start Slit: the start of this order's run for the efficiency report
+          ...(status === 'in_production' && !job.productionStartedAt ? { productionStartedAt: nowIso } : {}),
           updatedAt: nowIso,
         };
 

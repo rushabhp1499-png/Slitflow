@@ -19,6 +19,7 @@ import { FloorSetupModal } from './components/FloorSetupModal';
 import { AssignJobModal } from './components/AssignJobModal';
 import { LiveFloor } from './components/LiveFloor';
 import { ActivityLogModal } from './components/ActivityLogModal';
+import { EfficiencyReportModal } from './components/EfficiencyReportModal';
 import { MaterialInward } from './types';
 import { COMPANY_INFO } from './data/mockData';
 
@@ -228,6 +229,7 @@ function MainAppContent() {
   const [selectedJobForSpecApproval, setSelectedJobForSpecApproval] = useState<MaterialInward | null>(null);
   const [isFloorSetupOpen, setIsFloorSetupOpen] = useState(false);
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
+  const [isEfficiencyOpen, setIsEfficiencyOpen] = useState(false);
   const [selectedJobForAssign, setSelectedJobForAssign] = useState<MaterialInward | null>(null);
 
   const handleOpenChallan = (job: MaterialInward) => {
@@ -287,6 +289,7 @@ function MainAppContent() {
             onOpenFloorSetup={() => setIsFloorSetupOpen(true)}
             onOpenAssignModal={(job) => setSelectedJobForAssign(job)}
             onOpenActivityLog={() => setIsActivityLogOpen(true)}
+            onOpenEfficiency={() => setIsEfficiencyOpen(true)}
           />
         ) : (
           <CustomerPortal
@@ -319,6 +322,8 @@ function MainAppContent() {
       {isFloorSetupOpen && <FloorSetupModal onClose={() => setIsFloorSetupOpen(false)} />}
 
       {isActivityLogOpen && <ActivityLogModal onClose={() => setIsActivityLogOpen(false)} />}
+
+      {isEfficiencyOpen && <EfficiencyReportModal onClose={() => setIsEfficiencyOpen(false)} />}
 
       {selectedJobForAssign && (
         <AssignJobModal

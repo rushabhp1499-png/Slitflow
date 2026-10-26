@@ -7,6 +7,7 @@ import { exportJobsToExcel } from '../utils/excelExport';
 import { isMachineLocked } from '../utils/floorPlan';
 import {
   FileSpreadsheet,
+  Gauge,
   Search,
   Filter,
   Calendar,
@@ -46,6 +47,7 @@ interface FactoryDashboardProps {
   onOpenFloorSetup?: () => void;
   onOpenAssignModal?: (job: MaterialInward) => void;
   onOpenActivityLog?: () => void;
+  onOpenEfficiency?: () => void;
 }
 
 export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
@@ -60,6 +62,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
   onOpenFloorSetup,
   onOpenAssignModal,
   onOpenActivityLog,
+  onOpenEfficiency,
 }) => {
   const {
     jobs,
@@ -257,6 +260,18 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             >
               <Clock className="w-3.5 h-3.5" />
               <span>Activity Log</span>
+            </button>
+          )}
+
+          {onOpenEfficiency && (
+            <button
+              type="button"
+              onClick={onOpenEfficiency}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold transition"
+              title="How well each machine was used: utilisation, kg per hour, idle time"
+            >
+              <Gauge className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Efficiency</span>
             </button>
           )}
 
