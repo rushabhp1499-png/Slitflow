@@ -4,6 +4,10 @@ import { MaterialInward } from '../types';
 export const isOpenOrder = (j: MaterialInward) =>
   j.status !== 'po_closed' && j.poStatus !== 'closed' && j.status !== 'dispatched' && (j.remainingWeightKg ?? j.incomingWeight) > 0;
 
+// Once slitting has started on a machine, the order stays on it (the database enforces this too).
+export const isMachineLocked = (j: MaterialInward) =>
+  !!j.assignment?.machineId && j.status !== 'received' && j.status !== 'pending_production';
+
 // A machine's line of open orders: the one under slitting first, then the planned order.
 export const machineQueue = (jobs: MaterialInward[], machineId: string) =>
   jobs
@@ -26,7 +30,7 @@ export const planOrder = (
   nowIso: string
 ): MaterialInward[] => {
   const moving = jobs.find((j) => j.id === jobId);
-  if (!moving) return jobs;
+  if (!moving || (isMachineLocked(moving) && moving.assignment?.machineId !== machineId)) return jobs;
   if (!machineId) {
     return jobs.map((j) => (j.id === jobId ? { ...j, assignment: undefined, updatedAt: nowIso } : j));
   }

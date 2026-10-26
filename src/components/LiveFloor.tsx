@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useProduction } from '../context/ProductionContext';
 import { MaterialInward } from '../types';
 import { formatKg } from '../utils/weight';
-import { isOpenOrder, machineQueue, orderTargetKg, packedKg, pendingKg } from '../utils/floorPlan';
-import { Maximize, ArrowLeft, PanelLeftClose, PanelLeftOpen, Search, X, GripVertical } from 'lucide-react';
+import { isMachineLocked, isOpenOrder, machineQueue, orderTargetKg, packedKg, pendingKg } from '../utils/floorPlan';
+import { Maximize, ArrowLeft, PanelLeftClose, PanelLeftOpen, Search, X, GripVertical, Lock } from 'lucide-react';
 
 // Live Floor and planner. Left: open POs not yet on a machine. Right: one tile per machine with the
 // order it is on and the orders lined up after it. Drag a PO onto a machine (or tap it, then tap the
@@ -96,16 +96,19 @@ export const LiveFloor: React.FC = () => {
       setPickedId(null);
       return;
     }
-    if (job.status === 'in_production' && job.assignment?.machineId && job.assignment.machineId !== machineId) {
-      const from = machines.find((m) => m.id === job.assignment?.machineId)?.number || 'its machine';
-      if (!window.confirm(`PO ${job.customerPoNo} is under slitting on ${from}. Move it anyway?`)) return;
+    if (isMachineLocked(job) && job.assignment?.machineId !== machineId) {
+      const on = machines.find((m) => m.id === job.assignment?.machineId)?.number || 'its machine';
+      window.alert(`Production has started for PO ${job.customerPoNo} on ${on}, so it can't be moved or taken off.`);
+      setPickedId(null);
+      return;
     }
     planJob(jobId, machineId, beforeJobId);
     setPickedId(null);
   };
 
+  // Started orders stay on their machine, so they can't be picked up.
   const dragProps = (job: MaterialInward) => ({
-    draggable: true,
+    draggable: !isMachineLocked(job),
     onDragStart: (e: React.DragEvent) => {
       e.dataTransfer.setData('text/plain', job.id);
       e.dataTransfer.effectAllowed = 'move';
@@ -344,14 +347,21 @@ export const LiveFloor: React.FC = () => {
                         onClick={(e) => {
                           e.stopPropagation();
                           if (picked) place(picked.id, m.id, running ? undefined : job.id);
-                          else setPickedId(job.id);
+                          else if (!isMachineLocked(job)) setPickedId(job.id);
                         }}
-                        className={`cursor-grab active:cursor-grabbing select-none rounded-lg ${
+                        className={`${isMachineLocked(job) ? '' : 'cursor-grab active:cursor-grabbing'} select-none rounded-lg ${
                           dropTarget === `${m.id}:${job.id}` && !running ? 'border-t-2 border-violet-400 pt-1' : ''
                         } ${pickedId === job.id ? 'ring-2 ring-violet-400' : ''} ${dragId === job.id ? 'opacity-40' : ''}`}
-                        title="Drag to another machine or back to the PO list"
+                        title={
+                          isMachineLocked(job)
+                            ? `Production has started, so this PO stays on ${m.number}`
+                            : 'Drag to another machine or back to the PO list'
+                        }
                       >
-                        <div className="text-xl font-black font-mono text-sky-300">PO {job.customerPoNo}</div>
+                        <div className="text-xl font-black font-mono text-sky-300 flex items-center gap-2">
+                          PO {job.customerPoNo}
+                          {isMachineLocked(job) && <Lock className="w-4 h-4 text-slate-400" />}
+                        </div>
                         <div className="text-base font-bold truncate">{job.customerName}</div>
                         <div className="text-xs text-slate-400 truncate">
                           {job.grade} • {job.thickness} {job.thicknessUnit}
@@ -399,9 +409,11 @@ export const LiveFloor: React.FC = () => {
                           onClick={(e) => {
                             e.stopPropagation();
                             if (picked) place(picked.id, m.id, j.id);
-                            else setPickedId(j.id);
+                            else if (!isMachineLocked(j)) setPickedId(j.id);
                           }}
-                          className={`flex items-center gap-1.5 text-xs rounded-md px-1.5 py-1 cursor-grab active:cursor-grabbing select-none ${
+                          className={`flex items-center gap-1.5 text-xs rounded-md px-1.5 py-1 select-none ${
+                            isMachineLocked(j) ? '' : 'cursor-grab active:cursor-grabbing'
+                          } ${
                             dropTarget === `${m.id}:${j.id}` ? 'bg-violet-900/60 border-t-2 border-violet-400' : 'bg-slate-950/60'
                           } ${pickedId === j.id ? 'ring-2 ring-violet-400' : ''} ${dragId === j.id ? 'opacity-40' : ''}`}
                           title="Drag to change the order, or onto another machine"
@@ -411,6 +423,11 @@ export const LiveFloor: React.FC = () => {
                           <span className="font-mono font-bold text-sky-300 shrink-0">{j.customerPoNo}</span>
                           <span className="text-slate-400 truncate flex-1">{j.customerName}</span>
                           <span className="font-mono text-slate-300 shrink-0">{formatKg(pendingKg(j))} kg</span>
+                          {isMachineLocked(j) ? (
+                            <span title={`Production has started, so this PO stays on ${m.number}`}>
+                              <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                            </span>
+                          ) : (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -421,6 +438,7 @@ export const LiveFloor: React.FC = () => {
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
+                          )}
                         </div>
                       ))}
                     </div>

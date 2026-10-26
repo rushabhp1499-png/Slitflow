@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useProduction } from '../context/ProductionContext';
 import { MaterialInward } from '../types';
-import { X, Cog } from 'lucide-react';
+import { isMachineLocked } from '../utils/floorPlan';
+import { X, Cog, Lock } from 'lucide-react';
 
 interface AssignJobModalProps {
   job: MaterialInward;
@@ -13,6 +14,7 @@ interface AssignJobModalProps {
 export const AssignJobModal: React.FC<AssignJobModalProps> = ({ job, onClose, onOpenFloorSetup }) => {
   const { machines, floorStaff, assignJob, floorSetupMissing } = useProduction();
   const current = job.assignment;
+  const machineLocked = isMachineLocked(job);
 
   const [machineId, setMachineId] = useState(current?.machineId || '');
   const [operatorId, setOperatorId] = useState(current?.operatorId || '');
@@ -35,7 +37,7 @@ export const AssignJobModal: React.FC<AssignJobModalProps> = ({ job, onClose, on
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200">
         <div className="bg-slate-900 text-white px-5 py-4 flex items-center justify-between">
           <div className="min-w-0">
-            <h2 className="text-base font-bold">Assign Machine & Operator</h2>
+            <h2 className="text-base font-bold">{machineLocked ? 'Change Operator' : 'Assign Machine & Operator'}</h2>
             <p className="text-xs text-slate-400 truncate">
               PO {job.customerPoNo} • {job.customerName}
             </p>
@@ -63,7 +65,12 @@ export const AssignJobModal: React.FC<AssignJobModalProps> = ({ job, onClose, on
             <>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Machine</label>
-                <select value={machineId} onChange={(e) => setMachineId(e.target.value)} className={selectClass}>
+                <select
+                  value={machineId}
+                  onChange={(e) => setMachineId(e.target.value)}
+                  disabled={machineLocked}
+                  className={`${selectClass} disabled:bg-slate-100 disabled:text-slate-700`}
+                >
                   <option value="">— Not assigned —</option>
                   {activeMachines.map((m) => (
                     <option key={m.id} value={m.id}>
@@ -72,9 +79,15 @@ export const AssignJobModal: React.FC<AssignJobModalProps> = ({ job, onClose, on
                     </option>
                   ))}
                 </select>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  A new machine puts this order last in its line. Change the order on the Live Floor planner.
-                </p>
+                {machineLocked ? (
+                  <p className="text-[11px] text-amber-800 mt-1 flex items-center gap-1">
+                    <Lock className="w-3 h-3" /> Production has started, so the machine can't be changed.
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    A new machine puts this order last in its line. Change the order on the Live Floor planner.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Operator</label>
@@ -92,7 +105,7 @@ export const AssignJobModal: React.FC<AssignJobModalProps> = ({ job, onClose, on
         </div>
 
         <div className="bg-slate-50 border-t border-slate-200 px-5 py-3 flex items-center justify-between">
-          {current ? (
+          {current && !machineLocked ? (
             <button
               onClick={() => {
                 assignJob(job.id, null);

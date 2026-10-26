@@ -257,6 +257,13 @@ begin
   if public.challan_bundle_duplicates(new.data) > public.challan_bundle_duplicates(old.data) then
     raise exception 'A bundle is already on another challan. Each bundle can only be dispatched once.';
   end if;
+
+  -- Once slitting has started, the order stays on its machine: nobody can clear or change it.
+  if coalesce(old.data ->> 'status', 'received') not in ('received', 'pending_production')
+     and nullif(old.data #>> '{assignment,machineId}', '') is not null
+     and (new.data #>> '{assignment,machineId}') is distinct from (old.data #>> '{assignment,machineId}') then
+    raise exception 'Production has started for PO %, so its machine cannot be changed.', old.data ->> 'customerPoNo';
+  end if;
   return new;
 end;
 $$;
@@ -794,7 +801,8 @@ begin
     select x into ob from jsonb_array_elements(coalesce(o -> 'bundles', '[]'::jsonb)) x where x ->> 'id' = b ->> 'id';
     if ob is null then
       perform write_audit('bundle_added', 'bundle', b ->> 'id', po,
-        (b ->> 'bundleTag') || ' weighed: gross ' || (b ->> 'grossWeightKg') || ' kg, net ' || (b ->> 'netWeightKg') || ' kg');
+        coalesce(b ->> 'bundleTag', 'Bundle') || ' weighed: gross ' || coalesce(b ->> 'grossWeightKg', '?')
+          || ' kg, net ' || coalesce(b ->> 'netWeightKg', '?') || ' kg');
     elsif (ob - 'status' - 'dispatchedInChallanId' - 'dispatchedInChallanNo')
         <> (b - 'status' - 'dispatchedInChallanId' - 'dispatchedInChallanNo') then
       perform write_audit('bundle_edited', 'bundle', b ->> 'id', po, (b ->> 'bundleTag') || ' changed',

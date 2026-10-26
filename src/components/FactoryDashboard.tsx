@@ -5,6 +5,7 @@ import { StatusBadge } from './StatusBadge';
 import { DailyProductionChart } from './DailyProductionChart';
 import { SIZE_MASTER_URL, sizeMasterLink } from '../utils/sizeMaster';
 import { exportJobsToExcel } from '../utils/excelExport';
+import { isMachineLocked } from '../utils/floorPlan';
 import {
   FileSpreadsheet,
   Search,
@@ -765,10 +766,13 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                               type="button"
                               onClick={() => onOpenAssignModal(job)}
                               className="mt-1.5 flex items-center gap-1 text-[11px] text-left hover:underline"
-                              title="Assign machine and operator"
+                              title={isMachineLocked(job) ? 'Production has started: the machine is fixed. Click to change the operator.' : 'Assign machine and operator'}
                             >
                               {job.assignment?.machineId ? (
-                                <span className="font-semibold text-slate-800">
+                                <span className="font-semibold text-slate-800 inline-flex items-center gap-1">
+                                  {isMachineLocked(job) && (
+                                    <Lock className="w-3 h-3 text-slate-500" aria-label="Production started: machine fixed" />
+                                  )}
                                   {machines.find((m) => m.id === job.assignment?.machineId)?.number || 'Machine'}
                                   {job.assignment.operatorId
                                     ? ` • ${floorStaff.find((s) => s.id === job.assignment?.operatorId)?.name || ''}`

@@ -26,7 +26,7 @@ import {
 } from '../data/mockData';
 import { supabase, getSupabase, errorMessage } from '../lib/supabase';
 import { TableSync, SyncedRow } from '../lib/tableSync';
-import { machineQueue, planOrder } from '../utils/floorPlan';
+import { isMachineLocked, machineQueue, planOrder } from '../utils/floorPlan';
 
 type AuthResult = { success: boolean; message: string };
 
@@ -653,6 +653,11 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setJobs(prev =>
       prev.map(j => {
         if (j.id !== jobId) return j;
+        // Slitting has started: the machine stays; only the operator can change.
+        if (isMachineLocked(j)) {
+          if (!assignment) return j;
+          assignment = { ...assignment, machineId: j.assignment!.machineId };
+        }
         if (!assignment) return { ...j, assignment: undefined, updatedAt: nowIso };
         const sameMachine = assignment.machineId === j.assignment?.machineId;
         const lastPosition = assignment.machineId
