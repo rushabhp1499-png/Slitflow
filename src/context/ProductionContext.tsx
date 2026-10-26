@@ -26,6 +26,7 @@ import {
 } from '../data/mockData';
 import { supabase, getSupabase, errorMessage } from '../lib/supabase';
 import { TableSync, SyncedRow } from '../lib/tableSync';
+import { machineQueue, planOrder } from '../utils/floorPlan';
 
 type AuthResult = { success: boolean; message: string };
 
@@ -95,6 +96,8 @@ interface ProductionContextType {
   saveMachine: (machine: Omit<Machine, 'id'> & { id?: string }) => void;
   saveFloorStaff: (person: Omit<FloorStaff, 'id'> & { id?: string }) => void;
   assignJob: (jobId: string, assignment: Omit<JobAssignment, 'assignedAt' | 'assignedBy'> | null) => void;
+  // Floor planner: put an order in a machine's line (before another order, or last), or take it off (null).
+  planJob: (jobId: string, machineId: string | null, beforeJobId?: string) => void;
 
   // Factory staff authentication (emails listed in the staff_emails table)
   staffRole: 'manager' | 'owner' | 'developer' | null; // which factory login this is
@@ -644,19 +647,35 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setFloorStaff(upsertById<FloorStaff>({ ...person, id: person.id || newId('st') }));
   };
 
+  // Machine and operator from the Assign window. A new machine puts the order last in that machine's line.
   const assignJob: ProductionContextType['assignJob'] = (jobId, assignment) => {
     const nowIso = new Date().toISOString();
     setJobs(prev =>
-      prev.map(j =>
-        j.id !== jobId
-          ? j
-          : {
-              ...j,
-              assignment: assignment ? { ...assignment, assignedAt: nowIso, assignedBy: actorName } : undefined,
-              updatedAt: nowIso,
-            }
-      )
+      prev.map(j => {
+        if (j.id !== jobId) return j;
+        if (!assignment) return { ...j, assignment: undefined, updatedAt: nowIso };
+        const sameMachine = assignment.machineId === j.assignment?.machineId;
+        const lastPosition = assignment.machineId
+          ? Math.max(0, ...machineQueue(prev, assignment.machineId).map(q => q.assignment?.queuePosition || 0))
+          : 0;
+        return {
+          ...j,
+          assignment: {
+            machineId: assignment.machineId || undefined,
+            operatorId: assignment.operatorId || undefined,
+            queuePosition: sameMachine ? j.assignment?.queuePosition : assignment.machineId ? lastPosition + 1 : undefined,
+            assignedAt: nowIso,
+            assignedBy: actorName,
+          },
+          updatedAt: nowIso,
+        };
+      })
     );
+  };
+
+  const planJob: ProductionContextType['planJob'] = (jobId, machineId, beforeJobId) => {
+    const nowIso = new Date().toISOString();
+    setJobs(prev => planOrder(prev, jobId, machineId, beforeJobId, actorName, nowIso));
   };
 
   const activeFactoryUser = factoryUsers.find(u => u.id === activeFactoryUserId) || null;
@@ -2305,6 +2324,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         saveMachine,
         saveFloorStaff,
         assignJob,
+        planJob,
         isFactoryAuthenticated,
         loginFactory,
         logoutFactory,

@@ -9,24 +9,22 @@ interface AssignJobModalProps {
   onOpenFloorSetup: () => void;
 }
 
-// Optional: pick the machine, operator and helpers for an order.
+// Optional: pick the machine and operator for an order. Helpers are arranged by the manager on the floor.
 export const AssignJobModal: React.FC<AssignJobModalProps> = ({ job, onClose, onOpenFloorSetup }) => {
   const { machines, floorStaff, assignJob, floorSetupMissing } = useProduction();
   const current = job.assignment;
 
   const [machineId, setMachineId] = useState(current?.machineId || '');
   const [operatorId, setOperatorId] = useState(current?.operatorId || '');
-  const [helperIds, setHelperIds] = useState<string[]>(current?.helperIds || []);
 
   // Inactive people/machines stay selectable only if already assigned here.
   const activeMachines = machines
     .filter((m) => m.active || m.id === current?.machineId)
     .sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }));
   const operators = floorStaff.filter((s) => (s.active || s.id === current?.operatorId) && s.role !== 'helper');
-  const helpers = floorStaff.filter((s) => (s.active || current?.helperIds?.includes(s.id)) && s.id !== operatorId);
 
   const save = () => {
-    assignJob(job.id, machineId || operatorId || helperIds.length ? { machineId, operatorId, helperIds } : null);
+    assignJob(job.id, machineId || operatorId ? { machineId, operatorId } : null);
     onClose();
   };
 
@@ -37,7 +35,7 @@ export const AssignJobModal: React.FC<AssignJobModalProps> = ({ job, onClose, on
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200">
         <div className="bg-slate-900 text-white px-5 py-4 flex items-center justify-between">
           <div className="min-w-0">
-            <h2 className="text-base font-bold">Assign Machine & Team</h2>
+            <h2 className="text-base font-bold">Assign Machine & Operator</h2>
             <p className="text-xs text-slate-400 truncate">
               PO {job.customerPoNo} • {job.customerName}
             </p>
@@ -74,6 +72,9 @@ export const AssignJobModal: React.FC<AssignJobModalProps> = ({ job, onClose, on
                     </option>
                   ))}
                 </select>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  A new machine puts this order last in its line. Change the order on the Live Floor planner.
+                </p>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Operator</label>
@@ -85,27 +86,6 @@ export const AssignJobModal: React.FC<AssignJobModalProps> = ({ job, onClose, on
                     </option>
                   ))}
                 </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Helpers</label>
-                {helpers.length === 0 ? (
-                  <p className="text-xs text-slate-500">No helpers added yet.</p>
-                ) : (
-                  <div className="grid grid-cols-2 gap-1.5 max-h-40 overflow-y-auto">
-                    {helpers.map((s) => (
-                      <label key={s.id} className="flex items-center gap-2 text-sm bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={helperIds.includes(s.id)}
-                          onChange={(e) =>
-                            setHelperIds((prev) => (e.target.checked ? [...prev, s.id] : prev.filter((id) => id !== s.id)))
-                          }
-                        />
-                        {s.name}
-                      </label>
-                    ))}
-                  </div>
-                )}
               </div>
             </>
           )}

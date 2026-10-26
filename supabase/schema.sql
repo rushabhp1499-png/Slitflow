@@ -733,14 +733,24 @@ begin
   n := new.data;
   po := n ->> 'customerPoNo';
 
-  if (o -> 'assignment') is distinct from (n -> 'assignment') then
+  -- Machine or operator changed: one entry. Only the place in the machine's line changed: a smaller one.
+  if (o #>> '{assignment,machineId}') is distinct from (n #>> '{assignment,machineId}')
+     or (o #>> '{assignment,operatorId}') is distinct from (n #>> '{assignment,operatorId}') then
     select data ->> 'number' into mname from machines where id = n #>> '{assignment,machineId}';
     select data ->> 'name' into opname from floor_staff where id = n #>> '{assignment,operatorId}';
     perform write_audit('machine_assigned', 'order', new.id, po,
-      case when n -> 'assignment' is null or jsonb_typeof(n -> 'assignment') = 'null'
-        then 'Machine assignment cleared'
-        else 'Assigned to ' || coalesce(mname, 'no machine') || coalesce(', operator ' || opname, '') end,
+      case when coalesce(n #>> '{assignment,machineId}', n #>> '{assignment,operatorId}') is null
+        then 'Taken off the machine plan'
+        else 'Assigned to ' || coalesce(mname, 'no machine')
+          || coalesce(' (no. ' || (n #>> '{assignment,queuePosition}') || ' in line)', '')
+          || coalesce(', operator ' || opname, '') end,
       jsonb_build_object('before', o -> 'assignment', 'after', n -> 'assignment'));
+  elsif (o #>> '{assignment,queuePosition}') is distinct from (n #>> '{assignment,queuePosition}')
+        and (n #>> '{assignment,machineId}') is not null then
+    select data ->> 'number' into mname from machines where id = n #>> '{assignment,machineId}';
+    perform write_audit('machine_queue_changed', 'order', new.id, po,
+      'Now no. ' || (n #>> '{assignment,queuePosition}') || ' in line on ' || coalesce(mname, 'its machine'),
+      jsonb_build_object('before', o #> '{assignment,queuePosition}', 'after', n #> '{assignment,queuePosition}'));
   end if;
 
   if coalesce(o ->> 'poStatus', '') <> 'closed' and n ->> 'poStatus' = 'closed' then

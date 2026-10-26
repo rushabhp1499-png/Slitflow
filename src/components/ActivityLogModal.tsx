@@ -18,7 +18,7 @@ interface AuditEntry {
 
 const GROUPS: Array<{ key: string; label: string; match: (a: string) => boolean }> = [
   { key: 'all', label: 'Everything', match: () => true },
-  { key: 'machines', label: 'Machine assignment', match: (a) => a === 'machine_assigned' },
+  { key: 'machines', label: 'Machine assignment & planning', match: (a) => a === 'machine_assigned' || a === 'machine_queue_changed' },
   { key: 'po', label: 'PO closed / reopened', match: (a) => a === 'po_closed' || a === 'po_reopened' },
   { key: 'challans', label: 'Challans', match: (a) => a.startsWith('challan_') },
   { key: 'amend', label: 'PO amendments', match: (a) => a.startsWith('change_') || a === 'order_edited' },

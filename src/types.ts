@@ -65,11 +65,11 @@ export interface FloorStaff {
   active: boolean;
 }
 
-// Optional: which machine and people are running an order.
+// Optional: which machine (and operator) an order is planned on. Helpers are not tracked.
 export interface JobAssignment {
   machineId?: string;
   operatorId?: string;
-  helperIds?: string[];
+  queuePosition?: number; // order in the machine's line: 1 runs first (an order under slitting always comes first)
   assignedAt: string;
   assignedBy: string;
 }

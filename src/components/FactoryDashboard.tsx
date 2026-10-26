@@ -277,7 +277,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
               type="button"
               onClick={onOpenFloorSetup}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold transition"
-              title="Machines, operators and helpers"
+              title="Machines and staff"
             >
               <Users className="w-3.5 h-3.5 text-emerald-400" />
               <span>Floor Setup</span>
@@ -765,7 +765,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                               type="button"
                               onClick={() => onOpenAssignModal(job)}
                               className="mt-1.5 flex items-center gap-1 text-[11px] text-left hover:underline"
-                              title="Assign machine, operator and helpers"
+                              title="Assign machine and operator"
                             >
                               {job.assignment?.machineId ? (
                                 <span className="font-semibold text-slate-800">
