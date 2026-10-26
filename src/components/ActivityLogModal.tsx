@@ -24,6 +24,7 @@ const GROUPS: Array<{ key: string; label: string; match: (a: string) => boolean 
   { key: 'amend', label: 'PO amendments', match: (a) => a.startsWith('change_') || a === 'order_edited' },
   { key: 'bundles', label: 'Bundles', match: (a) => a.startsWith('bundle_') },
   { key: 'setup', label: 'Customers, machines, staff', match: (a) => /^(customers|machines|floor_staff)_/.test(a) },
+  { key: 'whatsapp', label: 'WhatsApp messages', match: (a) => a.startsWith('whatsapp_') },
 ];
 
 const ROLE_LABEL: Record<string, string> = {

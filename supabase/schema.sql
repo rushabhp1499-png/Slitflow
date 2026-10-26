@@ -885,6 +885,200 @@ begin
 end;
 $$;
 
+-- =====================================================================
+-- 9. Automatic WhatsApp updates to customers (Meta WhatsApp Cloud API)
+--    Sends an approved template message when: material is received,
+--    the delivery date is set/changed, a challan is made, or a change
+--    request is approved/declined. Does nothing until the two secrets
+--    'whatsapp_token' and 'whatsapp_phone_number_id' are saved in the
+--    Supabase Vault (see WHATSAPP_SETUP.md). Every attempt is recorded
+--    in the activity log. Safe to run again.
+-- =====================================================================
+
+create extension if not exists pg_net;
+
+-- Reads a secret from Supabase Vault (null if missing).
+create or replace function public.whatsapp_secret(p_name text)
+returns text
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v text;
+begin
+  begin
+    execute 'select decrypted_secret from vault.decrypted_secrets where name = $1 limit 1' into v using p_name;
+  exception when others then
+    v := null;
+  end;
+  return v;
+end;
+$$;
+revoke execute on function public.whatsapp_secret(text) from public, anon, authenticated;
+
+-- WhatsApp template parameters may not contain line breaks, tabs or long runs of spaces.
+create or replace function public.whatsapp_clean(t text)
+returns text
+language sql immutable
+as $$
+  select left(regexp_replace(regexp_replace(coalesce(nullif(trim(t), ''), '-'), '[\r\n\t]+', ' ', 'g'), ' {2,}', ' ', 'g'), 500);
+$$;
+
+-- Indian numbers: digits only, 91 added to 10-digit numbers.
+create or replace function public.whatsapp_number(p text)
+returns text
+language sql immutable
+as $$
+  select case
+    when length(d) = 10 then '91' || d
+    when length(d) = 11 and d like '0%' then '91' || substr(d, 2)
+    when length(d) >= 11 then d
+    else null
+  end
+  from (select regexp_replace(coalesce(p, ''), '\D', '', 'g') as d) x;
+$$;
+
+-- Queues one template message. Returns 'queued #<request id>', 'not_configured' or 'error: ...'.
+create or replace function public.whatsapp_send(p_to text, p_template text, p_params text[], p_lang text default 'en')
+returns text
+language plpgsql security definer set search_path = public
+as $$
+declare
+  token text := public.whatsapp_secret('whatsapp_token');
+  phone_id text := public.whatsapp_secret('whatsapp_phone_number_id');
+  payload jsonb;
+  req bigint;
+begin
+  if token is null or phone_id is null then
+    return 'not_configured';
+  end if;
+  payload := jsonb_build_object(
+    'messaging_product', 'whatsapp',
+    'to', p_to,
+    'type', 'template',
+    'template', jsonb_build_object(
+      'name', p_template,
+      'language', jsonb_build_object('code', p_lang),
+      'components', case when coalesce(array_length(p_params, 1), 0) = 0 then '[]'::jsonb else jsonb_build_array(
+        jsonb_build_object('type', 'body', 'parameters',
+          (select jsonb_agg(jsonb_build_object('type', 'text', 'text', public.whatsapp_clean(x)) order by i)
+           from unnest(p_params) with ordinality as u(x, i)))) end
+    )
+  );
+  select net.http_post(
+    url := 'https://graph.facebook.com/v21.0/' || phone_id || '/messages',
+    body := payload,
+    headers := jsonb_build_object('Content-Type', 'application/json', 'Authorization', 'Bearer ' || token)
+  ) into req;
+  return 'queued #' || req;
+exception when others then
+  return 'error: ' || sqlerrm;
+end;
+$$;
+revoke execute on function public.whatsapp_send(text, text, text[], text) from public, anon, authenticated;
+
+-- Sends one message and records the attempt in the activity log.
+create or replace function public.whatsapp_notify(p_job jsonb, p_customer jsonb, p_template text, p_params text[])
+returns void
+language plpgsql security definer set search_path = public
+as $$
+declare
+  phone text := public.whatsapp_number(coalesce(nullif(p_customer ->> 'phone', ''), p_job ->> 'customerPhone'));
+  result text;
+begin
+  if coalesce((p_customer ->> 'whatsappUpdates')::boolean, true) = false then
+    return;
+  end if;
+  result := case when phone is null then 'no valid phone number on the customer' else public.whatsapp_send(phone, p_template, p_params) end;
+  perform write_audit(
+    case when result like 'queued%' then 'whatsapp_sent' else 'whatsapp_not_sent' end,
+    'order', p_job ->> 'id', p_job ->> 'customerPoNo',
+    'WhatsApp ' || p_template || ' to ' || coalesce('+' || phone, '(no number)') || ': ' || result,
+    jsonb_build_object('params', to_jsonb(p_params)));
+end;
+$$;
+revoke execute on function public.whatsapp_notify(jsonb, jsonb, text, text[]) from public, anon, authenticated;
+
+-- Watches orders for the four customer updates.
+create or replace function public.jobs_whatsapp()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+declare
+  n jsonb := new.data;
+  o jsonb;
+  cu jsonb;
+  who text;
+  po text;
+  c jsonb;
+  r jsonb;
+  oc jsonb;
+begin
+  select data into cu from customers where id = new.customer_id;
+  if cu is null then
+    return null;
+  end if;
+  who := coalesce(nullif(cu ->> 'contactPerson', ''), cu ->> 'companyName', 'Customer');
+  po := coalesce(n ->> 'customerPoNo', '-');
+
+  if tg_op = 'INSERT' then
+    -- Skip old records being imported
+    if coalesce((n ->> 'createdAt')::timestamptz, now()) > now() - interval '1 day' then
+      perform whatsapp_notify(n, cu, 'material_received',
+        array[who, po, coalesce(n ->> 'incomingWeight', '-'), coalesce(n ->> 'grade', 'material')]);
+    end if;
+    return null;
+  end if;
+
+  o := old.data;
+
+  if (n ->> 'estimatedDeliveryDate') is not null
+     and (o ->> 'estimatedDeliveryDate') is distinct from (n ->> 'estimatedDeliveryDate') then
+    perform whatsapp_notify(n, cu, 'delivery_date_set',
+      array[who, po, to_char((n ->> 'estimatedDeliveryDate')::date, 'DD Mon YYYY')]);
+  end if;
+
+  for c in select * from jsonb_array_elements(coalesce(n -> 'challans', '[]'::jsonb)) loop
+    if coalesce((c ->> 'isSuperseded')::boolean, false) = false
+       and not exists (select 1 from jsonb_array_elements(coalesce(o -> 'challans', '[]'::jsonb)) x where x ->> 'id' = c ->> 'id') then
+      perform whatsapp_notify(n, cu, 'material_dispatched', array[
+        who, po, c ->> 'challanNo', c ->> 'thisDispatchWeightKg', coalesce(c ->> 'totalBundles', '0'),
+        coalesce(nullif(nullif(c ->> 'vehicleNo', ''), '—'), '-'), coalesce(c ->> 'remainingBalanceWeightKg', '-')]);
+    end if;
+  end loop;
+
+  for r in select * from jsonb_array_elements(coalesce(n -> 'specChangeRequests', '[]'::jsonb)) loop
+    select x into oc from jsonb_array_elements(coalesce(o -> 'specChangeRequests', '[]'::jsonb)) x where x ->> 'id' = r ->> 'id';
+    if oc is not null and oc ->> 'status' = 'pending_approval' and r ->> 'status' in ('approved', 'rejected') then
+      perform whatsapp_notify(n, cu, 'change_request_update', array[
+        who, po, case when r ->> 'status' = 'approved' then 'approved' else 'declined' end,
+        coalesce(nullif(r ->> 'reviewNote', ''), '-')]);
+    end if;
+  end loop;
+
+  return null;
+exception when others then
+  return null; -- a WhatsApp problem must never stop an order from saving
+end;
+$$;
+
+drop trigger if exists jobs_whatsapp on public.jobs;
+create trigger jobs_whatsapp
+after insert or update on public.jobs
+for each row execute function public.jobs_whatsapp();
+
+-- Test from the SQL Editor: select public.whatsapp_test('9326737273');
+-- Sends Meta's built-in "hello_world" template.
+create or replace function public.whatsapp_test(p_phone text)
+returns text
+language sql security definer set search_path = public
+as $$
+  select public.whatsapp_send(public.whatsapp_number(p_phone), 'hello_world', array[]::text[], 'en_US');
+$$;
+revoke execute on function public.whatsapp_test(text) from public, anon, authenticated;
+
+-- Replies from Meta for the last messages (to check delivery problems):
+-- select id, status_code, content, created from net._http_response order by id desc limit 10;
+
 -- The three factory logins. Change the emails / names, then run.
 -- (Each person also needs a user in Authentication -> Users.)
 -- insert into public.staff_emails (email, staff_role, display_name) values

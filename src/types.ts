@@ -17,6 +17,7 @@ export interface Customer {
   password?: string; // Client portal password
   authorizedEmails: string[]; // Multiple email IDs granted login & notification access
   phone: string;
+  whatsappUpdates?: boolean; // automatic WhatsApp updates to `phone` (on unless set to false)
   gstNumber: string;
   panNumber?: string;
   registeredAddress: string; // Registered legal company address

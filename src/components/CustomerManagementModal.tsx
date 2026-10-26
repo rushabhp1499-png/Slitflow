@@ -80,6 +80,7 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
       companyName: editForm.companyName,
       email: editForm.email,
       phone: editForm.phone,
+      whatsappUpdates: editForm.whatsappUpdates !== false,
       gstNumber: editForm.gstNumber,
       panNumber: editForm.panNumber,
       registeredAddress: editForm.registeredAddress,
@@ -473,13 +474,21 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Contact Phone</label>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Contact Phone (WhatsApp)</label>
                       <input
                         type="text"
                         value={editForm.phone}
                         onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
                         className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg"
                       />
+                      <label className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={editForm.whatsappUpdates !== false}
+                          onChange={(e) => setEditForm({ ...editForm, whatsappUpdates: e.target.checked })}
+                        />
+                        Send WhatsApp updates to this number
+                      </label>
                     </div>
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">City & State</label>
