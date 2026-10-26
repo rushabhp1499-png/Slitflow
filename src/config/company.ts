@@ -4,8 +4,8 @@ export const COMPANY = {
   name: 'PROGRESSIVE ENTERPRISES',
   tagline: 'Precision Slitting Works',
   address: 'Shed no. H-11/5,6, Shree Arihant Compound, Kalher, Bhiwandi, Maharashtra - 421302',
-  gstin: '', // TODO: real GSTIN (the old value 27AAACP1234F1Z8 was a placeholder)
-  phone: '', // TODO: real phone number (the old value +91 98200 45678 was a placeholder)
+  gstin: '27AAPFP2606N1ZR',
+  phone: '+91 93267 37273',
   email: 'progressive.ent8@gmail.com',
   jurisdiction: 'Bhiwandi / Thane',
 };

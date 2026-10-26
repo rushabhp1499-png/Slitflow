@@ -2,8 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { MaterialInward, CoreType } from '../types';
 import { useProduction } from '../context/ProductionContext';
 import { toScaleKg, formatKg } from '../utils/weight';
-import { printBundleSticker } from '../utils/bundleSticker';
-import { Scale, Plus, Trash2, X, Package, Truck, PlusCircle, Printer } from 'lucide-react';
+import { Scale, Plus, Trash2, X, Package, Truck, PlusCircle } from 'lucide-react';
 
 interface BundleWeighingModalProps {
   job: MaterialInward;
@@ -22,16 +21,18 @@ const PREFS_KEY = 'slitflow_bundle_prefs_v1';
 interface BundlePrefs {
   coreType: CoreType;
   tareKg: string;
-  printAfterSave: boolean;
 }
 const loadPrefs = (): BundlePrefs => {
   try {
     const saved = localStorage.getItem(PREFS_KEY);
-    if (saved) return { coreType: 'paper_core', tareKg: '1.20', printAfterSave: false, ...JSON.parse(saved) };
+    if (saved) {
+      const { coreType, tareKg } = JSON.parse(saved);
+      return { coreType: coreType || 'paper_core', tareKg: tareKg ?? '1.20' };
+    }
   } catch {
     // ignore
   }
-  return { coreType: 'paper_core', tareKg: '1.20', printAfterSave: false };
+  return { coreType: 'paper_core', tareKg: '1.20' };
 };
 
 export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({ job, onClose, onOpenChallan }) => {
@@ -75,7 +76,6 @@ export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({ job, o
     },
   ]);
   const [lastSavedTag, setLastSavedTag] = useState<string>('');
-  const [popupBlocked, setPopupBlocked] = useState(false);
 
   const updateRollRow = (id: string, field: 'rollCount' | 'widthMm', value: string) =>
     setRollRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
@@ -111,7 +111,6 @@ export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({ job, o
       netWeightKg: net,
     });
     setLastSavedTag(saved.bundleTag);
-    if (prefs.printAfterSave) setPopupBlocked(!printBundleSticker(saved, currentJob));
     // Ready for the next bundle: clear the reading, keep core and roll settings.
     setGrossInput('');
     grossRef.current?.focus();
@@ -314,16 +313,7 @@ export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({ job, o
               {rollsSummaryText && <p className="text-[11px] text-slate-600">{rollsSummaryText} • {totalRollsCount} rolls</p>}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={prefs.printAfterSave}
-                  onChange={(e) => setPrefs((p) => ({ ...p, printAfterSave: e.target.checked }))}
-                  className="w-4 h-4"
-                />
-                Print sticker after each save
-              </label>
+            <div className="flex flex-wrap items-center justify-end gap-3">
               <button
                 type="submit"
                 disabled={!canSave}
@@ -332,11 +322,6 @@ export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({ job, o
                 <Plus className="w-4 h-4" /> Save {nextBundleTag}
               </button>
             </div>
-            {popupBlocked && (
-              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
-                The browser blocked the sticker window. Allow pop-ups for this site, or use the Sticker button in the list below.
-              </p>
-            )}
           </form>
 
           {/* Bundles list */}
@@ -385,14 +370,6 @@ export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({ job, o
                         </td>
                         <td className="py-2 px-3">
                           <div className="flex items-center justify-end gap-1">
-                            <button
-                              type="button"
-                              onClick={() => setPopupBlocked(!printBundleSticker(b, currentJob))}
-                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-100"
-                              title="Print this bundle's sticker"
-                            >
-                              <Printer className="w-3 h-3" /> Sticker
-                            </button>
                             {b.status !== 'dispatched' && (
                               <button
                                 type="button"
