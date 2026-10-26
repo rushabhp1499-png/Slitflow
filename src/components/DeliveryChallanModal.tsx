@@ -3,7 +3,8 @@ import { MaterialInward, DeliveryChallan } from '../types';
 import { useProduction } from '../context/ProductionContext';
 import { COMPANY_INFO } from '../data/mockData';
 import { companyContactLine } from '../config/company';
-import { downloadChallanPdf } from '../utils/challanExport';
+import { downloadChallanPdf, printChallanPdf } from '../utils/challanExport';
+import { ChallanPreview } from './ChallanPreview';
 import { WhatsAppDispatchModal } from './WhatsAppDispatchModal';
 import { EmailDispatchModal } from './EmailDispatchModal';
 import {
@@ -174,6 +175,14 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job:
 
   const [createError, setCreateError] = useState<string>('');
 
+  // Unslit balance material (e.g. a jumbo roll) sent back on this challan
+  const [returnOn, setReturnOn] = useState(false);
+  const [returnKgInput, setReturnKgInput] = useState('');
+  const [returnRolls, setReturnRolls] = useState('1');
+  const [returnNote, setReturnNote] = useState('');
+  const returnKg = returnOn ? Math.round((Number(returnKgInput) || 0) * 20) / 20 : 0;
+  const totalLeaving = Number((newDispatchWeight + returnKg).toFixed(2));
+
   // Toggle individual bundle checkbox for new challan
   const toggleBundleSelection = (bundleId: string) => {
     setSelectedBundleIds((prev) =>
@@ -243,26 +252,39 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job:
   const handleCreateNewChallan = (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError('');
-    if (newDispatchWeight <= 0 || selectedBundles.length === 0) {
-      setCreateError('Tick at least one weighed bundle for this challan.');
+    if (selectedBundles.length === 0 && returnKg <= 0) {
+      setCreateError('Tick at least one weighed bundle, or enter the unslit material being returned.');
+      return;
+    }
+    if (returnOn && returnKg <= 0) {
+      setCreateError('Enter the weight of the unslit material being returned.');
+      return;
+    }
+    if (totalLeaving > balanceRemaining + 0.001) {
+      setCreateError(`This challan sends ${totalLeaving.toFixed(2)} kg but only ${balanceRemaining.toFixed(2)} kg of this order is still with you.`);
       return;
     }
 
-    const isPartial = newDispatchWeight < balanceRemaining;
+    const isPartial = totalLeaving < balanceRemaining;
 
     try {
       const created = generateDeliveryChallan(job.id, {
         dispatchType: isPartial ? 'partial' : 'final',
-        thisDispatchWeightKg: newDispatchWeight,
+        thisDispatchWeightKg: totalLeaving,
         bundlesCount: newBundlesCount,
         vehicleNo: (newVehicleNo && newVehicleNo.trim()) ? newVehicleNo.trim().toUpperCase() : (job.vehicleNo || '—'),
         transporterName: newTransporter,
         eWayBillNo: newEWayBill,
         // Only bundles that are still ready right now
         selectedBundleIds: selectedBundles.map((b) => b.id),
-        remarks: newRemarks || `Dispatch of ${newDispatchWeight} kg in ${newBundlesCount} bundles for PO #${job.customerPoNo}`,
+        returnedMaterial: returnKg > 0 ? { weightKg: returnKg, rolls: Number(returnRolls) || 0, note: returnNote } : undefined,
+        remarks: newRemarks,
       });
       setSelectedBundleIds([]);
+      setReturnOn(false);
+      setReturnKgInput('');
+      setReturnRolls('1');
+      setReturnNote('');
       setActiveChallanId(created.id);
       setIsCreatingNew(false);
     } catch (err) {
@@ -288,8 +310,11 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job:
     downloadChallanPdf(activeChallan, job);
   };
 
+  // Prints the same one-page PDF that Download gives; falls back to downloading it
+  // if the browser blocks the new tab.
   const handlePrint = () => {
-    window.print();
+    if (!activeChallan) return;
+    if (!printChallanPdf(activeChallan, job)) downloadChallanPdf(activeChallan, job);
   };
 
   const handleOpenWhatsAppModal = () => {
@@ -749,6 +774,59 @@ ${companyContactLine()}`;
                   )}
                 </div>
 
+                {/* Unslit balance material going back to the customer */}
+                <div className="border border-slate-200 rounded-2xl p-4 bg-white">
+                  <label className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-900 cursor-pointer">
+                    <input type="checkbox" checked={returnOn} onChange={(e) => setReturnOn(e.target.checked)} className="w-4 h-4" />
+                    Also return unslit material (balance jumbo roll)
+                  </label>
+                  {returnOn && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Weight (kg) *</label>
+                        <input
+                          type="number"
+                          step={0.05}
+                          min={0.05}
+                          value={returnKgInput}
+                          onChange={(e) => setReturnKgInput(e.target.value)}
+                          onBlur={(e) => {
+                            const kg = Number(e.target.value);
+                            if (kg > 0) setReturnKgInput((Math.round(kg * 20) / 20).toFixed(2));
+                          }}
+                          placeholder="e.g. 200"
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-mono font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">No. of rolls</label>
+                        <input
+                          type="number"
+                          min={0}
+                          value={returnRolls}
+                          onChange={(e) => setReturnRolls(e.target.value)}
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm font-mono font-bold"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Note</label>
+                        <input
+                          type="text"
+                          value={returnNote}
+                          onChange={(e) => setReturnNote(e.target.value)}
+                          placeholder="e.g. Balance jumbo roll returned unslit"
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm"
+                        />
+                      </div>
+                      <p className="col-span-2 sm:col-span-4 text-[11px] text-slate-500">
+                        Still with you before this challan: <strong>{balanceRemaining.toFixed(2)} kg</strong>. This challan sends{' '}
+                        <strong>{totalLeaving.toFixed(2)} kg</strong> ({newDispatchWeight.toFixed(2)} kg slit + {returnKg.toFixed(2)} kg unslit), leaving{' '}
+                        <strong>{Math.max(0, balanceRemaining - totalLeaving).toFixed(2)} kg</strong>.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 {/* Primary Weighment and Dispatch Inputs - Strictly Locked to Bundle Selection */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -876,18 +954,18 @@ ${companyContactLine()}`;
                   )}
                   <button
                     type="submit"
-                    disabled={newBundlesCount === 0 || newDispatchWeight <= 0}
+                    disabled={totalLeaving <= 0}
                     className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold shadow-md transition ${
-                      newBundlesCount === 0 || newDispatchWeight <= 0
+                      totalLeaving <= 0
                         ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
                         : 'bg-blue-600 hover:bg-blue-700 text-white hover:shadow-lg cursor-pointer'
                     }`}
                   >
                     <FileText className="w-4 h-4" />
                     <span>
-                      {newBundlesCount === 0
-                        ? 'Select Bundles Above to Generate Challan'
-                        : `Generate Delivery Challan (${newDispatchWeight.toFixed(2)} kg / ${newBundlesCount} Bundles)`}
+                      {totalLeaving <= 0
+                        ? 'Tick bundles or add returned material'
+                        : `Generate Delivery Challan (${totalLeaving.toFixed(2)} kg${newBundlesCount ? ` • ${newBundlesCount} bundles` : ''}${returnKg > 0 ? ' • incl. unslit return' : ''})`}
                     </span>
                   </button>
                 </div>
@@ -1218,272 +1296,7 @@ ${companyContactLine()}`;
                 </form>
               )}
 
-              {/* OFFICIAL CHALLAN DOCUMENT PREVIEW (PRINTABLE) */}
-              <div
-                id="printable-challan-document"
-                className="bg-white border border-slate-300 rounded-2xl p-6 sm:p-8 shadow-sm font-sans text-slate-900"
-              >
-                {/* Letterhead */}
-                <div className="border-b-2 border-slate-900 pb-5 mb-5 flex flex-col sm:flex-row justify-between items-start gap-4">
-                  <div>
-                    <h2 className="text-2xl font-black tracking-tight text-slate-950 uppercase">
-                      {COMPANY_INFO.name}
-                    </h2>
-                    <p className="text-xs text-slate-600 mt-1 max-w-lg leading-relaxed">
-                      {COMPANY_INFO.address}
-                    </p>
-                    <p className="text-xs text-slate-600 mt-0.5">
-                      {companyContactLine()}
-                    </p>
-                  </div>
-
-                  <div className="text-left sm:text-right shrink-0">
-                    <div className="inline-block bg-blue-900 text-white px-3 py-1 rounded text-xs font-extrabold uppercase tracking-wider mb-1">
-                      Delivery Challan
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      Rule 55 of CGST Rules, 2017 (Job Work)
-                    </p>
-                    <div className="font-mono font-black text-base text-slate-900 bg-slate-100 px-2 py-0.5 rounded mt-1 inline-block">
-                      {activeChallan.challanNo}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Metadata Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 border border-slate-200 rounded-xl p-4 mb-5 text-xs">
-                  <div>
-                    <h4 className="font-bold text-[10px] text-slate-500 uppercase tracking-wider mb-1.5">
-                      Consignee / Customer Details
-                    </h4>
-                    <p className="font-black text-sm text-slate-900">{activeChallan.customerName}</p>
-                    <p className="text-slate-600 mt-1">
-                      Delivery Address:{' '}
-                      <span className="font-medium text-slate-800">
-                        {activeChallan.customerDeliveryAddress || customer?.plantAddress || customer?.registeredAddress || '—'}
-                      </span>
-                    </p>
-                    <p className="text-slate-600 mt-0.5">
-                      Customer GSTIN:{' '}
-                      <strong className="font-mono text-slate-900">{activeChallan.customerGst || customer?.gstNumber || '—'}</strong>
-                    </p>
-                    <p className="text-slate-600 mt-0.5">
-                      Customer PO No:{' '}
-                      <strong className="font-mono text-blue-800">{job.customerPoNo}</strong>
-                    </p>
-                  </div>
-
-                  <div>
-                    <h4 className="font-bold text-[10px] text-slate-500 uppercase tracking-wider mb-1.5">
-                      Dispatch & Logistics Details
-                    </h4>
-                    <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-                      <div>
-                        <span className="text-slate-500">Challan Date:</span>
-                        <p className="font-bold text-slate-900">
-                          {new Date(activeChallan.challanDate).toLocaleDateString('en-IN', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric',
-                          })}
-                        </p>
-                      </div>
-                      <div>
-                        <span className="text-slate-500">Vehicle No:</span>
-                        <p className="font-mono font-bold text-slate-900">{activeChallan.vehicleNo}</p>
-                      </div>
-                      <div>
-                        <span className="text-slate-500">Transporter:</span>
-                        <p className="font-bold text-slate-900 truncate">{activeChallan.transporterName || 'Road Lines'}</p>
-                      </div>
-                      <div>
-                        <span className="text-slate-500">E-Way Bill:</span>
-                        <p className="font-mono font-bold text-slate-900">{activeChallan.eWayBillNo || '24198273910'}</p>
-                      </div>
-                      <div className="col-span-2 mt-0.5">
-                        <span className="text-slate-500">Inward Challan Ref:</span>
-                        <p className="font-mono text-slate-800">{activeChallan.incomingChallanRef || job.inwardChallanNo}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Table of Material Dispatched */}
-                <div className="border border-slate-200 rounded-xl overflow-hidden mb-5">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-900 text-white uppercase text-[10px] tracking-wider">
-                      <tr>
-                        <th className="py-2.5 px-3 w-12 text-center">#</th>
-                        <th className="py-2.5 px-3">Description of Goods</th>
-                        <th className="py-2.5 px-3">Grade & Dimensions</th>
-                        <th className="py-2.5 px-3 text-right">Bundles</th>
-                        <th className="py-2.5 px-3 text-right">Net Weight</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      <tr>
-                        <td className="py-3 px-3 text-center text-slate-500 font-mono">1</td>
-                        <td className="py-3 px-3">
-                          <p className="font-bold text-slate-900">Precision Slitted Metal Coils / Rolls</p>
-                          <p className="text-[11px] text-slate-500">
-                            Processed from Inward Job #{job.jobNo} • Customer PO #{job.customerPoNo}
-                          </p>
-                        </td>
-                        <td className="py-3 px-3">
-                          <span className="font-semibold text-slate-800">{job.grade}</span>
-                          <span className="text-slate-500 block text-[11px]">
-                            {job.thickness}{job.thicknessUnit} • Width: {job.outputDetails?.slitCuts?.length
-                              ? job.outputDetails.slitCuts.map((c) => `${c.widthMm}mm`).join(', ')
-                              : job.requestedSlitSizes?.length
-                              ? job.requestedSlitSizes.map((s) => `${s.widthMm}mm`).join(', ')
-                              : `${job.incomingWidth}mm`}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono font-bold text-slate-800">
-                          {activeChallan.totalBundles} Bundles
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono font-black text-sm text-slate-950">
-                          {activeChallan.thisDispatchWeightKg.toLocaleString()} kg
-                        </td>
-                      </tr>
-                    </tbody>
-                    <tfoot className="bg-slate-50 font-bold border-t-2 border-slate-300">
-                      <tr>
-                        <td colSpan={4} className="py-2.5 px-3 text-right uppercase text-[11px] text-slate-700">
-                          Total Dispatched Net Weight:
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-black text-base text-blue-900">
-                          {activeChallan.thisDispatchWeightKg.toLocaleString()} kg
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-
-                {/* Itemized Bundle Dispatch Schedule & Scale Readings */}
-                {(() => {
-                  const dispatchedList = activeChallan.dispatchedBundles && activeChallan.dispatchedBundles.length > 0
-                    ? activeChallan.dispatchedBundles
-                    : (job.bundles || []).filter(b => b.dispatchedInChallanId === activeChallan.id || activeChallan.selectedBundleIds?.includes(b.id));
-
-                  const displayList = (dispatchedList && dispatchedList.length > 0)
-                    ? dispatchedList
-                    : Array.from({ length: Math.max(1, activeChallan.totalBundles) }, (_, i) => {
-                        const avgNet = Number((activeChallan.thisDispatchWeightKg / Math.max(1, activeChallan.totalBundles)).toFixed(2));
-                        const tare = 1.20;
-                        return {
-                          id: `auto-${i}`,
-                          bundleNumber: i + 1,
-                          bundleTag: `BNDL-${String(i + 1).padStart(2, '0')}`,
-                          rollsSummary: `${job.thickness}${job.thicknessUnit} Precision Slitted Coils`,
-                          totalRollsCount: 10,
-                          grossWeightKg: Number((avgNet + tare).toFixed(2)),
-                          paperCoreTareWeightKg: tare,
-                          netWeightKg: avgNet,
-                          coreType: 'paper_core' as const,
-                          status: 'dispatched' as const,
-                        };
-                      });
-
-                  const totalGross = displayList.reduce((sum, b) => sum + (b.grossWeightKg || 0), 0);
-                  const totalTare = displayList.reduce((sum, b) => sum + (b.paperCoreTareWeightKg || 0), 0);
-                  const totalNet = displayList.reduce((sum, b) => sum + (b.netWeightKg || 0), 0);
-
-                  return (
-                    <div className="mb-5 border border-slate-200 rounded-xl overflow-hidden">
-                      <div className="bg-slate-900 text-white px-3.5 py-2 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-black uppercase tracking-wider">
-                            Itemized Bundle Dispatch Schedule ({displayList.length} Bundles Dispatched)
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-slate-300 font-mono">
-                          Scale Least Count: 50 g (0.05 kg certified resolution)
-                        </span>
-                      </div>
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-100 text-slate-700 uppercase text-[10px] font-bold border-b border-slate-200">
-                          <tr>
-                            <th className="py-2 px-3 w-10 text-center">#</th>
-                            <th className="py-2 px-3">Bundle Tag</th>
-                            <th className="py-2 px-3">Specification / Description</th>
-                            <th className="py-2 px-3">Core type</th>
-                            <th className="py-2 px-3 text-right font-mono">Gross Wt (kg)</th>
-                            <th className="py-2 px-3 text-right font-mono">Tare Deduction</th>
-                            <th className="py-2 px-3 text-right font-mono font-black">Net Wt (kg)</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-200 font-mono text-[11px]">
-                          {displayList.map((b, idx) => (
-                            <tr key={b.id || idx} className="hover:bg-slate-50/80">
-                              <td className="py-2 px-3 text-center text-slate-500">{idx + 1}</td>
-                              <td className="py-2 px-3 font-bold text-blue-900">{b.bundleTag}</td>
-                              <td className="py-2 px-3 font-sans text-slate-700">{b.rollsSummary || `${b.totalRollsCount || 10} reels`}</td>
-                              <td className="py-2 px-3 font-sans text-xs font-medium text-slate-800">
-                                {b.coreType === 'paper_core' ? 'Paper Tube' : 'Plastic Tube'}
-                              </td>
-                              <td className="py-2 px-3 text-right text-slate-700">{b.grossWeightKg.toFixed(2)} kg</td>
-                              <td className="py-2 px-3 text-right text-amber-700">-{b.paperCoreTareWeightKg.toFixed(2)} kg</td>
-                              <td className="py-2 px-3 text-right font-black text-slate-950">{b.netWeightKg.toFixed(2)} kg</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot className="bg-slate-50 font-mono font-bold border-t-2 border-slate-300 text-xs">
-                          <tr>
-                            <td colSpan={4} className="py-2 px-3 text-right uppercase text-[10px] text-slate-600 font-sans">
-                              Dispatched Bundle Totals ({displayList.length} bundles):
-                            </td>
-                            <td className="py-2 px-3 text-right text-slate-900">{totalGross.toFixed(2)} kg</td>
-                            <td className="py-2 px-3 text-right text-amber-700">-{totalTare.toFixed(2)} kg</td>
-                            <td className="py-2 px-3 text-right text-blue-900 font-black text-sm">{totalNet.toFixed(2)} kg</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                      <div className="px-3 py-1.5 bg-slate-50 border-t border-slate-200 text-[10px] text-slate-500 flex items-center justify-between">
-                        <span>Physical scale verification conducted at Progressive Enterprises dispatch dock.</span>
-                        <span className="font-semibold text-slate-700">Any unticked bundles remain safely staged on factory shop floor.</span>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Job Weight Reconciliation Summary Bar */}
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs font-mono mb-6">
-                  <div>
-                    <span className="text-slate-500">Total Inward: </span>
-                    <strong className="text-slate-900">{activeChallan.totalOrderWeightKg.toLocaleString()} kg</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Dispatched In This Challan: </span>
-                    <strong className="text-blue-800">{activeChallan.thisDispatchWeightKg.toLocaleString()} kg</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Factory Balance Remaining: </span>
-                    <strong className="text-emerald-700">{activeChallan.remainingBalanceWeightKg.toLocaleString()} kg</strong>
-                  </div>
-                </div>
-
-                {/* Terms and Authorized Signatures */}
-                <div className="pt-4 border-t border-slate-300 flex flex-col sm:flex-row justify-between items-end gap-6 text-xs">
-                  <div className="max-w-md text-[11px] text-slate-500 space-y-1">
-                    <p className="font-bold text-slate-800">Terms & Statutory Declarations:</p>
-                    <p>1. Goods dispatched for Job-Work processing under GST Rule 55. Not for outright sale.</p>
-                    <p>2. Customer to inspect bundle tags and confirm weighment within 24 hours of arrival.</p>
-                    <p>3. Subject to Bhiwandi / Thane jurisdiction only.</p>
-                  </div>
-
-                  <div className="text-right shrink-0">
-                    <p className="font-bold text-slate-900">For {COMPANY_INFO.name}</p>
-                    <div className="h-12 flex items-center justify-end">
-                      <span className="font-serif italic text-slate-400 text-xs">[Authorized Signatory]</span>
-                    </div>
-                    <p className="text-[11px] font-semibold text-slate-600 border-t border-slate-300 pt-1">
-                      Production & Dispatch In-Charge
-                    </p>
-                  </div>
-                </div>
-
-              </div>
+              <ChallanPreview challan={activeChallan} job={job} />
             </div>
           ) : null}
 

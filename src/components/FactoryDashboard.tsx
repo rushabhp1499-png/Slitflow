@@ -156,9 +156,10 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
 
     const isClosed = isJobClosed(job);
 
+    // Closed POs live only under the Closed POs card (or when searched for by number).
     const matchesStatus =
       statusFilter === 'ALL'
-        ? true
+        ? !isClosed || !!query
         : todayChecks[statusFilter]
         ? todayChecks[statusFilter](job)
         : statusFilter === 'IN_QUEUE'

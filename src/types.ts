@@ -224,6 +224,9 @@ export interface DeliveryChallan {
   incomingChallanRef: string;
   
   items: DeliveryChallanItem[];
+  // Unslit balance (e.g. a jumbo roll) sent back to the customer on this challan
+  returnedMaterial?: { weightKg: number; rolls: number; note?: string };
+  slitNetWeightKg?: number; // net weight of the slit bundles only (thisDispatchWeightKg also includes returned material)
   totalBundles: number;
   totalNetWeightKg: number;
   totalScrapWeightKg: number;

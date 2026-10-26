@@ -69,7 +69,9 @@ export const buildTimeline = (job: MaterialInward): TimelineEvent[] => {
     events.push({
       at: c.revisedAt || c.challanDate,
       title: `Dispatched – challan ${c.challanNo}`,
-      detail: `${formatKg(c.thisDispatchWeightKg)} kg in ${c.totalBundles} bundles${c.vehicleNo ? ` • vehicle ${c.vehicleNo}` : ''}`,
+      detail: `${formatKg(c.thisDispatchWeightKg)} kg${c.totalBundles ? ` in ${c.totalBundles} bundles` : ''}${
+        c.returnedMaterial ? ` (incl. ${formatKg(c.returnedMaterial.weightKg)} kg unslit material returned)` : ''
+      }${c.vehicleNo && c.vehicleNo !== '—' ? ` • vehicle ${c.vehicleNo}` : ''}`,
       tone: 'done',
     });
   }

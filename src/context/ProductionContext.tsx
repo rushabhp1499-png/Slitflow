@@ -66,6 +66,7 @@ interface GenerateChallanParams {
   eWayBillNo?: string;
   remarks?: string;
   selectedBundleIds?: string[];
+  returnedMaterial?: { weightKg: number; rolls: number; note?: string };
 }
 
 interface ProductionContextType {
@@ -1217,8 +1218,16 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     // A challan lists only weighed bundles that are not on any other active challan.
     const allJobBundles = job.bundles || [];
     const selectedBundleIds = Array.from(new Set(params.selectedBundleIds || []));
-    if (selectedBundleIds.length === 0) {
-      throw new Error('Tick at least one weighed bundle for this challan.');
+    const returned =
+      params.returnedMaterial && params.returnedMaterial.weightKg > 0
+        ? {
+            weightKg: Math.round(params.returnedMaterial.weightKg * 20) / 20,
+            rolls: Math.max(0, Math.round(params.returnedMaterial.rolls || 0)),
+            note: params.returnedMaterial.note?.trim() || undefined,
+          }
+        : undefined;
+    if (selectedBundleIds.length === 0 && !returned) {
+      throw new Error('Tick at least one weighed bundle, or enter the unslit material being returned.');
     }
     const onChallan = activeChallanByBundle(job);
     const unavailable = selectedBundleIds
@@ -1233,25 +1242,19 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     const matchedBundles = allJobBundles.filter(b => selectedBundleIds.includes(b.id));
 
-    let dispatchWeight = Number(params.thisDispatchWeightKg);
-    let bundles = Number(params.bundlesCount) || Math.ceil(dispatchWeight / (job.bundleSpecs?.targetBundleWeightKg || 28));
-    let totalGrossWeight = dispatchWeight + (Number(params.scrapWeightKg) || 0);
-    let totalNetWeight = dispatchWeight;
-
-    if (matchedBundles.length > 0) {
-      bundles = matchedBundles.length;
-      totalGrossWeight = Number(matchedBundles.reduce((acc, b) => acc + b.grossWeightKg, 0).toFixed(2));
-      totalNetWeight = Number(matchedBundles.reduce((acc, b) => acc + b.netWeightKg, 0).toFixed(2));
-      dispatchWeight = totalNetWeight;
-    }
+    // Weights come only from the weighed bundles plus any returned unslit material.
+    const bundles = matchedBundles.length;
+    const totalGrossWeight = Number(matchedBundles.reduce((acc, b) => acc + b.grossWeightKg, 0).toFixed(2));
+    const totalNetWeight = Number(matchedBundles.reduce((acc, b) => acc + b.netWeightKg, 0).toFixed(2));
+    const dispatchWeight = Number((totalNetWeight + (returned?.weightKg || 0)).toFixed(2));
 
     const previousDispatchedWeight = job.dispatchedWeightKg || 0;
     const newDispatchedWeight = previousDispatchedWeight + dispatchWeight;
-    const remainingBalance = Math.max(0, job.incomingWeight - newDispatchedWeight);
+    const remainingBalance = Math.max(0, Number((job.incomingWeight - newDispatchedWeight).toFixed(2)));
 
     const unitType = params.unitType || job.bundleSpecs?.unitType || 'reels';
     const unitsPerBundle = params.unitsPerBundle || job.bundleSpecs?.unitsPerBundle || 10;
-    const bundleWeightApprox = params.bundleWeightApproxKg || (bundles > 0 ? Number((dispatchWeight / bundles).toFixed(1)) : 28);
+    const bundleWeightApprox = bundles > 0 ? Number((totalNetWeight / bundles).toFixed(2)) : 0;
     const scrapWeight = Number(params.scrapWeightKg) || 0;
 
     const driveFileName = `${challanNo.replace(/[\/\-]/g, '_')}_${job.customerName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
@@ -1294,28 +1297,47 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       eWayBillNo: params.eWayBillNo || '',
       incomingChallanRef: `${job.inwardChallanNo} dated ${job.receivedDate}`,
       items: [
-        {
-          srNo: 1,
-          description: params.dispatchType === 'partial'
-            ? `Slitted & Packed ${job.grade} (PARTIAL DISPATCH ${sequenceNumber} - Midway Urgent Delivery)`
-            : `Slitted & Packed ${job.grade} (FINAL BALANCE DISPATCH - Job-Work Completed)`,
-          grade: job.grade,
-          thickness: `${job.thickness} ${job.thicknessUnit}`,
-          slitWidthsSummary: slitSummary,
-          incomingWeightKg: job.incomingWeight,
-          dispatchedWeightKg: dispatchWeight,
-          scrapWeightKg: scrapWeight,
-          bundlesCount: bundles,
-          unitType,
-          unitsPerBundle,
-          bundleWeightApproxKg: bundleWeightApprox,
-          remarks: params.remarks || (
-            params.dispatchType === 'partial'
-              ? `Urgent midway release of ${dispatchWeight.toLocaleString()} kg in ${bundles} bundles (~${bundleWeightApprox} kg/bundle, ${unitsPerBundle} ${unitType}/bundle). Balance ${remainingBalance.toLocaleString()} kg under slitting.`
-              : `Final dispatch of ${dispatchWeight.toLocaleString()} kg in ${bundles} bundles. Complete order reconciled.`
-          ),
-        }
+        ...(bundles > 0
+          ? [
+              {
+                srNo: 1,
+                description: `Slitted & packed ${job.grade}`,
+                grade: job.grade,
+                thickness: `${job.thickness} ${job.thicknessUnit}`,
+                slitWidthsSummary: slitSummary,
+                incomingWeightKg: job.incomingWeight,
+                dispatchedWeightKg: totalNetWeight,
+                scrapWeightKg: scrapWeight,
+                bundlesCount: bundles,
+                unitType,
+                unitsPerBundle,
+                bundleWeightApproxKg: bundleWeightApprox,
+                remarks: params.remarks || '',
+              },
+            ]
+          : []),
+        ...(returned
+          ? [
+              {
+                srNo: bundles > 0 ? 2 : 1,
+                description: `Unslit ${job.grade} returned (balance material)`,
+                grade: job.grade,
+                thickness: `${job.thickness} ${job.thicknessUnit}`,
+                slitWidthsSummary: `${job.incomingWidth} mm (not slit)`,
+                incomingWeightKg: job.incomingWeight,
+                dispatchedWeightKg: returned.weightKg,
+                scrapWeightKg: 0,
+                bundlesCount: 0,
+                unitType,
+                unitsPerBundle: 0,
+                bundleWeightApproxKg: 0,
+                remarks: `${returned.rolls} roll(s)${returned.note ? ` • ${returned.note}` : ''}`,
+              },
+            ]
+          : []),
       ],
+      returnedMaterial: returned,
+      slitNetWeightKg: totalNetWeight,
       totalBundles: bundles,
       totalNetWeightKg: totalNetWeight,
       totalScrapWeightKg: scrapWeight,
@@ -1333,14 +1355,13 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           ? `Remaining raw material balance of ${remainingBalance.toLocaleString()} kg is currently in progress at Progressive Enterprises.`
           : 'All inward raw material accounted for and delivered back to customer.',
         'Goods processed and returned under Rule 55 of CGST Rules 2017 for Job-Work transactions.',
-        'Subject to Pune / Factory jurisdiction only.',
+        'Subject to Bhiwandi / Thane jurisdiction only.',
       ],
-      savedToDrive: true,
+      savedToDrive: false,
       drivePath,
-      driveSavedAt: nowIso,
-      emailSent: true,
-      sentToEmails: allAuthorizedEmails,
-      emailSentAt: nowIso,
+      // Not emailed yet: set only when the challan is actually sent.
+      emailSent: false,
+      sentToEmails: [],
       preparedBy: actorName,
       status: 'dispatched',
     };
@@ -1389,7 +1410,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       params.dispatchType === 'partial'
         ? `Partial Delivery Challan #${challanNo} Generated: ${dispatchWeight.toLocaleString()} kg`
         : `Final Delivery Challan #${challanNo} Generated: ${dispatchWeight.toLocaleString()} kg`,
-      `Challan #${challanNo} issued to ${job.customerName}. Dispatched ${dispatchWeight.toLocaleString()} kg in ${bundles} bundles via ${params.vehicleNo}. Emailed to ${allAuthorizedEmails.join(', ')}.`
+      `Challan #${challanNo} issued to ${job.customerName}. Dispatched ${dispatchWeight.toLocaleString()} kg (${bundles} bundles${returned ? ` + ${returned.weightKg} kg unslit material returned` : ''}) via ${params.vehicleNo}.`
     );
 
     return newChallan;
