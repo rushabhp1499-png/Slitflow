@@ -18,6 +18,7 @@ import { SpecChangeApprovalModal } from './components/SpecChangeApprovalModal';
 import { FloorSetupModal } from './components/FloorSetupModal';
 import { AssignJobModal } from './components/AssignJobModal';
 import { LiveFloor } from './components/LiveFloor';
+import { ActivityLogModal } from './components/ActivityLogModal';
 import { MaterialInward } from './types';
 import { COMPANY_INFO } from './data/mockData';
 
@@ -226,6 +227,7 @@ function MainAppContent() {
   const [selectedJobForPoClose, setSelectedJobForPoClose] = useState<MaterialInward | null>(null);
   const [selectedJobForSpecApproval, setSelectedJobForSpecApproval] = useState<MaterialInward | null>(null);
   const [isFloorSetupOpen, setIsFloorSetupOpen] = useState(false);
+  const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
   const [selectedJobForAssign, setSelectedJobForAssign] = useState<MaterialInward | null>(null);
 
   const handleOpenChallan = (job: MaterialInward) => {
@@ -284,6 +286,7 @@ function MainAppContent() {
             onOpenSpecApprovalModal={(job) => setSelectedJobForSpecApproval(job)}
             onOpenFloorSetup={() => setIsFloorSetupOpen(true)}
             onOpenAssignModal={(job) => setSelectedJobForAssign(job)}
+            onOpenActivityLog={() => setIsActivityLogOpen(true)}
           />
         ) : (
           <CustomerPortal
@@ -314,6 +317,8 @@ function MainAppContent() {
       )}
 
       {isFloorSetupOpen && <FloorSetupModal onClose={() => setIsFloorSetupOpen(false)} />}
+
+      {isActivityLogOpen && <ActivityLogModal onClose={() => setIsActivityLogOpen(false)} />}
 
       {selectedJobForAssign && (
         <AssignJobModal

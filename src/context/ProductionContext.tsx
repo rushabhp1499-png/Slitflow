@@ -97,6 +97,8 @@ interface ProductionContextType {
   assignJob: (jobId: string, assignment: Omit<JobAssignment, 'assignedAt' | 'assignedBy'> | null) => void;
 
   // Factory staff authentication (emails listed in the staff_emails table)
+  staffRole: 'manager' | 'owner' | 'developer' | null; // which factory login this is
+  staffName: string | null; // display name stamped on records
   isFactoryAuthenticated: boolean;
   loginFactory: (email: string, password: string) => Promise<AuthResult>;
   logoutFactory: () => void;
@@ -325,8 +327,10 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   const isFactoryAuthenticated = account?.role === 'staff';
-  // Name stamped on records (weighed by, prepared by, ...): the signed-in email.
-  const actorName = signedInEmail || 'Factory';
+  const [staffRole, setStaffRole] = useState<ProductionContextType['staffRole']>(null);
+  const [staffName, setStaffName] = useState<string | null>(null);
+  // Name stamped on records (weighed by, prepared by, ...): the staff member's name, else their email.
+  const actorName = staffName || signedInEmail || 'Factory';
   const authenticatedEmail = account?.role === 'customer' ? signedInEmail : null;
 
   // ---------------------------------------------------------------------
@@ -511,6 +515,8 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       setNotifications([]);
       setMachines([]);
       setFloorStaff([]);
+      setStaffRole(null);
+      setStaffName(null);
       setLocalImport(null);
       return;
     }
@@ -539,6 +545,13 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setSelectedCustomerId(prev => prev || (customersRes.data![0] as SyncedRow<Customer>).id);
       }
       if (account.role === 'staff') {
+        // Role and display name (section 8 of schema.sql; until then everyone is a plain manager).
+        const info = await sb.rpc('my_staff_info');
+        if (cancelled) return;
+        const row = Array.isArray(info.data) ? info.data[0] : info.data;
+        setStaffRole(row?.staff_role || 'manager');
+        setStaffName(row?.display_name || null);
+
         const legacy = readLegacyData();
         setLocalImport(legacy ? { jobs: legacy.jobs.length, customers: legacy.customers.length } : null);
 
@@ -2284,6 +2297,8 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         localImport,
         importLocalBrowserData,
         dismissLocalImport,
+        staffRole,
+        staffName,
         machines,
         floorStaff,
         floorSetupMissing,

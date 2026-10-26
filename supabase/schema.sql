@@ -612,3 +612,283 @@ begin
   end loop;
 end;
 $$;
+
+-- =====================================================================
+-- 8. Factory roles and the activity log
+--    Roles: manager (production manager), owner (top management),
+--    developer. The activity log is written only by the database
+--    triggers below, so it cannot be skipped or edited from the website.
+--    Owner and developer can read it. Safe to run again.
+-- =====================================================================
+
+alter table public.staff_emails add column if not exists staff_role text not null default 'manager';
+alter table public.staff_emails add column if not exists display_name text;
+do $$
+begin
+  alter table public.staff_emails
+    add constraint staff_emails_role_check check (staff_role in ('manager', 'owner', 'developer'));
+exception when duplicate_object then null;
+end;
+$$;
+
+-- Role of the signed-in factory login (null for customers).
+create or replace function public.my_staff_role()
+returns text
+language sql stable security definer set search_path = public
+as $$
+  select s.staff_role
+  from profiles p join staff_emails s on s.email = p.email
+  where p.user_id = auth.uid() and p.role = 'staff';
+$$;
+
+create or replace function public.my_staff_info()
+returns table (staff_role text, display_name text)
+language sql stable security definer set search_path = public
+as $$
+  select s.staff_role, coalesce(nullif(trim(s.display_name), ''), s.email)
+  from profiles p join staff_emails s on s.email = p.email
+  where p.user_id = auth.uid() and p.role = 'staff';
+$$;
+
+revoke execute on function public.my_staff_info() from public, anon;
+grant execute on function public.my_staff_info() to authenticated;
+
+create table if not exists public.audit_log (
+  id bigserial primary key,
+  at timestamptz not null default now(),
+  actor_email text,
+  actor_name text,
+  actor_role text,
+  action text not null,
+  entity text not null,
+  entity_id text,
+  ref text,          -- PO / machine / customer shown in the list
+  summary text not null,
+  details jsonb
+);
+create index if not exists audit_log_at_idx on public.audit_log (at desc);
+
+alter table public.audit_log enable row level security;
+drop policy if exists audit_log_select on public.audit_log;
+create policy audit_log_select on public.audit_log for select to authenticated
+  using (public.my_staff_role() in ('owner', 'developer'));
+revoke all on public.audit_log from anon;
+grant select on public.audit_log to authenticated;
+-- No insert/update/delete for anyone: only the triggers below write here.
+
+create or replace function public.write_audit(
+  p_action text, p_entity text, p_entity_id text, p_ref text, p_summary text, p_details jsonb default null
+)
+returns void
+language plpgsql security definer set search_path = public
+as $$
+declare
+  em text := lower(auth.jwt() ->> 'email');
+  s staff_emails%rowtype;
+begin
+  select * into s from staff_emails where email = em;
+  insert into audit_log (actor_email, actor_name, actor_role, action, entity, entity_id, ref, summary, details)
+  values (
+    coalesce(em, 'system'),
+    coalesce(nullif(trim(s.display_name), ''), em, 'system'),
+    case when s.email is not null then s.staff_role when em is null then 'system' else 'customer' end,
+    p_action, p_entity, p_entity_id, p_ref, p_summary, p_details
+  );
+end;
+$$;
+revoke execute on function public.write_audit(text, text, text, text, text, jsonb) from public, anon, authenticated;
+
+-- Orders: who assigned machines, closed/reopened POs, made/edited/deleted
+-- challans, weighed/edited/deleted bundles, changed dates or order details.
+create or replace function public.jobs_audit()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+declare
+  o jsonb;
+  n jsonb;
+  po text;
+  c jsonb;
+  oc jsonb;
+  b jsonb;
+  ob jsonb;
+  mname text;
+  opname text;
+  changed text[];
+  skip text[] := array['updatedAt', 'bundles', 'challans', 'challan', 'assignment', 'poStatus', 'status',
+    'estimatedDeliveryDate', 'eddHistory', 'specChangeRequests', 'dispatchedWeightKg', 'remainingWeightKg',
+    'poClosedAt', 'poClosedBy', 'poClosingNotes', 'jobNo', 'id'];
+begin
+  if tg_op = 'INSERT' then
+    perform write_audit('order_created', 'order', new.id, new.data ->> 'customerPoNo',
+      'Order created: ' || coalesce(new.data ->> 'grade', '') || ', ' || coalesce(new.data ->> 'incomingWeight', '?') || ' kg');
+    return null;
+  elsif tg_op = 'DELETE' then
+    perform write_audit('order_deleted', 'order', old.id, old.data ->> 'customerPoNo', 'Order deleted',
+      jsonb_build_object('order', old.data));
+    return null;
+  end if;
+
+  o := old.data;
+  n := new.data;
+  po := n ->> 'customerPoNo';
+
+  if (o -> 'assignment') is distinct from (n -> 'assignment') then
+    select data ->> 'number' into mname from machines where id = n #>> '{assignment,machineId}';
+    select data ->> 'name' into opname from floor_staff where id = n #>> '{assignment,operatorId}';
+    perform write_audit('machine_assigned', 'order', new.id, po,
+      case when n -> 'assignment' is null or jsonb_typeof(n -> 'assignment') = 'null'
+        then 'Machine assignment cleared'
+        else 'Assigned to ' || coalesce(mname, 'no machine') || coalesce(', operator ' || opname, '') end,
+      jsonb_build_object('before', o -> 'assignment', 'after', n -> 'assignment'));
+  end if;
+
+  if coalesce(o ->> 'poStatus', '') <> 'closed' and n ->> 'poStatus' = 'closed' then
+    perform write_audit('po_closed', 'order', new.id, po, 'PO closed',
+      jsonb_build_object('notes', n ->> 'poClosingNotes'));
+  elsif o ->> 'poStatus' = 'closed' and coalesce(n ->> 'poStatus', '') <> 'closed' then
+    perform write_audit('po_reopened', 'order', new.id, po, 'PO reopened');
+  end if;
+
+  if (o ->> 'estimatedDeliveryDate') is distinct from (n ->> 'estimatedDeliveryDate') then
+    perform write_audit('edd_changed', 'order', new.id, po,
+      'Delivery date ' || coalesce(o ->> 'estimatedDeliveryDate', 'not set') || ' → ' || coalesce(n ->> 'estimatedDeliveryDate', 'not set'));
+  end if;
+
+  if (o ->> 'status') is distinct from (n ->> 'status') then
+    perform write_audit('status_changed', 'order', new.id, po,
+      'Status ' || coalesce(o ->> 'status', '') || ' → ' || coalesce(n ->> 'status', ''));
+  end if;
+
+  -- Challans
+  for c in select * from jsonb_array_elements(coalesce(n -> 'challans', '[]'::jsonb)) loop
+    select x into oc from jsonb_array_elements(coalesce(o -> 'challans', '[]'::jsonb)) x where x ->> 'id' = c ->> 'id';
+    if oc is null then
+      perform write_audit('challan_created', 'challan', c ->> 'id', po,
+        'Challan ' || (c ->> 'challanNo') || ' created: ' || coalesce(c ->> 'thisDispatchWeightKg', '?') || ' kg');
+    elsif oc <> c then
+      perform write_audit('challan_edited', 'challan', c ->> 'id', po,
+        'Challan ' || (c ->> 'challanNo') || ' changed after it was generated',
+        jsonb_build_object('before', oc, 'after', c));
+    end if;
+  end loop;
+  for oc in select * from jsonb_array_elements(coalesce(o -> 'challans', '[]'::jsonb)) loop
+    if not exists (select 1 from jsonb_array_elements(coalesce(n -> 'challans', '[]'::jsonb)) x where x ->> 'id' = oc ->> 'id') then
+      perform write_audit('challan_deleted', 'challan', oc ->> 'id', po, 'Challan ' || (oc ->> 'challanNo') || ' deleted',
+        jsonb_build_object('challan', oc));
+    end if;
+  end loop;
+
+  -- Bundles (dispatch status changes are covered by the challan entries)
+  for b in select * from jsonb_array_elements(coalesce(n -> 'bundles', '[]'::jsonb)) loop
+    select x into ob from jsonb_array_elements(coalesce(o -> 'bundles', '[]'::jsonb)) x where x ->> 'id' = b ->> 'id';
+    if ob is null then
+      perform write_audit('bundle_added', 'bundle', b ->> 'id', po,
+        (b ->> 'bundleTag') || ' weighed: gross ' || (b ->> 'grossWeightKg') || ' kg, net ' || (b ->> 'netWeightKg') || ' kg');
+    elsif (ob - 'status' - 'dispatchedInChallanId' - 'dispatchedInChallanNo')
+        <> (b - 'status' - 'dispatchedInChallanId' - 'dispatchedInChallanNo') then
+      perform write_audit('bundle_edited', 'bundle', b ->> 'id', po, (b ->> 'bundleTag') || ' changed',
+        jsonb_build_object('before', ob, 'after', b));
+    end if;
+  end loop;
+  for ob in select * from jsonb_array_elements(coalesce(o -> 'bundles', '[]'::jsonb)) loop
+    if not exists (select 1 from jsonb_array_elements(coalesce(n -> 'bundles', '[]'::jsonb)) x where x ->> 'id' = ob ->> 'id') then
+      perform write_audit('bundle_deleted', 'bundle', ob ->> 'id', po, (ob ->> 'bundleTag') || ' deleted',
+        jsonb_build_object('bundle', ob));
+    end if;
+  end loop;
+
+  -- Customer change requests (PO amendments)
+  for c in select * from jsonb_array_elements(coalesce(n -> 'specChangeRequests', '[]'::jsonb)) loop
+    select x into oc from jsonb_array_elements(coalesce(o -> 'specChangeRequests', '[]'::jsonb)) x where x ->> 'id' = c ->> 'id';
+    if oc is null then
+      perform write_audit('change_requested', 'order', new.id, po, 'Customer requested a change: ' || coalesce(c ->> 'reason', ''),
+        jsonb_build_object('request', c));
+    elsif (oc ->> 'status') is distinct from (c ->> 'status') then
+      perform write_audit(case when c ->> 'status' = 'approved' then 'change_approved' else 'change_declined' end,
+        'order', new.id, po,
+        case when c ->> 'status' = 'approved' then 'PO amendment approved' else 'PO amendment declined' end
+          || coalesce(': ' || nullif(c ->> 'reviewNote', ''), ''),
+        jsonb_build_object('request', c));
+    end if;
+  end loop;
+
+  -- Anything else on the order itself
+  select array_agg(k) into changed
+  from (select jsonb_object_keys(o) as k union select jsonb_object_keys(n)) keys
+  where not (k = any (skip)) and (o -> k) is distinct from (n -> k);
+  if changed is not null then
+    perform write_audit('order_edited', 'order', new.id, po, 'Order details changed: ' || array_to_string(changed, ', '),
+      (select jsonb_object_agg(k, jsonb_build_object('before', o -> k, 'after', n -> k)) from unnest(changed) k));
+  end if;
+
+  return null;
+end;
+$$;
+
+drop trigger if exists jobs_audit on public.jobs;
+create trigger jobs_audit
+after insert or update or delete on public.jobs
+for each row execute function public.jobs_audit();
+
+-- Customers, machines and floor staff: added / changed
+create or replace function public.record_audit()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+declare
+  label text;
+  ref text;
+  changed text[];
+begin
+  label := case tg_table_name when 'customers' then 'Customer' when 'machines' then 'Machine' else 'Staff member' end;
+  if tg_op = 'DELETE' then
+    perform write_audit(tg_table_name || '_deleted', tg_table_name, old.id, null, label || ' deleted',
+      jsonb_build_object('record', old.data));
+    return null;
+  end if;
+  ref := coalesce(new.data ->> 'companyName', new.data ->> 'number', new.data ->> 'name');
+  if tg_op = 'INSERT' then
+    perform write_audit(tg_table_name || '_added', tg_table_name, new.id, ref, label || ' added: ' || coalesce(ref, new.id));
+  else
+    select array_agg(k) into changed
+    from (select jsonb_object_keys(old.data) as k union select jsonb_object_keys(new.data)) keys
+    where (old.data -> k) is distinct from (new.data -> k);
+    if changed is not null then
+      perform write_audit(tg_table_name || '_edited', tg_table_name, new.id, ref,
+        label || ' ' || coalesce(ref, new.id) || ' changed: ' || array_to_string(changed, ', '),
+        (select jsonb_object_agg(k, jsonb_build_object('before', old.data -> k, 'after', new.data -> k)) from unnest(changed) k));
+    end if;
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists customers_audit on public.customers;
+create trigger customers_audit after insert or update or delete on public.customers
+for each row execute function public.record_audit();
+drop trigger if exists machines_audit on public.machines;
+create trigger machines_audit after insert or update or delete on public.machines
+for each row execute function public.record_audit();
+drop trigger if exists floor_staff_audit on public.floor_staff;
+create trigger floor_staff_audit after insert or update or delete on public.floor_staff
+for each row execute function public.record_audit();
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'audit_log'
+  ) then
+    alter publication supabase_realtime add table public.audit_log;
+  end if;
+end;
+$$;
+
+-- The three factory logins. Change the emails / names, then run.
+-- (Each person also needs a user in Authentication -> Users.)
+-- insert into public.staff_emails (email, staff_role, display_name) values
+--   ('manager@example.com',   'manager',   'Production Manager'),
+--   ('owner@example.com',     'owner',     'Top Management'),
+--   ('developer@example.com', 'developer', 'Developer')
+-- on conflict (email) do update set staff_role = excluded.staff_role, display_name = excluded.display_name;

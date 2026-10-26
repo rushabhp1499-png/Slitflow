@@ -26,7 +26,11 @@ export const Navbar: React.FC<NavbarProps> = ({
     selectedCustomerId,
     currentCustomer: contextCustomer,
     signedInEmail,
+    staffRole,
+    staffName,
   } = useProduction();
+  const roleLabel =
+    staffRole === 'owner' ? 'Top Management' : staffRole === 'developer' ? 'Developer' : 'Production Manager';
 
   const unreadNotifs = notifications.filter((n) => !n.read).length;
   const currentCustomer =
@@ -87,10 +91,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <div className="flex flex-col">
                     <span className="font-bold text-slate-200 flex items-center gap-1 text-[11px]">
                       <Factory className="w-3 h-3 text-amber-400" />
-                      <span>Factory Admin</span>
+                      <span>{staffName && staffName !== signedInEmail ? staffName : roleLabel}</span>
                     </span>
                     <span className="font-mono text-[10px] text-slate-400">
-                      {signedInEmail}
+                      {staffName && staffName !== signedInEmail ? roleLabel : signedInEmail}
                     </span>
                   </div>
                 </div>

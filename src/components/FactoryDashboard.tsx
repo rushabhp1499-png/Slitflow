@@ -42,6 +42,7 @@ interface FactoryDashboardProps {
   onOpenSpecApprovalModal?: (job: MaterialInward) => void;
   onOpenFloorSetup?: () => void;
   onOpenAssignModal?: (job: MaterialInward) => void;
+  onOpenActivityLog?: () => void;
 }
 
 export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
@@ -55,12 +56,14 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
   onOpenSpecApprovalModal,
   onOpenFloorSetup,
   onOpenAssignModal,
+  onOpenActivityLog,
 }) => {
   const {
     jobs,
     customers,
     machines,
     floorStaff,
+    staffRole,
     updateJobStatus,
     reopenCustomerPo,
   } = useProduction();
@@ -223,6 +226,19 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             >
               <Building2 className="w-3.5 h-3.5 text-blue-400" />
               <span>Customer Master & Emails</span>
+            </button>
+          )}
+
+          {/* Who changed what: top management and developer only */}
+          {onOpenActivityLog && (staffRole === 'owner' || staffRole === 'developer') && (
+            <button
+              type="button"
+              onClick={onOpenActivityLog}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold transition"
+              title="Every change, who made it and when"
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Activity Log</span>
             </button>
           )}
 
@@ -663,16 +679,27 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                             </span>
                           ) : null}
 
-                          {(job.specChangeRequests || []).some((r) => r.status === 'pending_approval') && onOpenSpecApprovalModal && (
-                            <button
-                              type="button"
-                              onClick={() => onOpenSpecApprovalModal(job)}
-                              className="mt-1.5 inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded animate-pulse"
-                              title="The customer asked to change this order. Review it."
-                            >
-                              <AlertCircle className="w-3 h-3 text-amber-700" />
-                              Change request
-                            </button>
+                          {(job.specChangeRequests || []).length > 0 && onOpenSpecApprovalModal && (
+                            (job.specChangeRequests || []).some((r) => r.status === 'pending_approval') ? (
+                              <button
+                                type="button"
+                                onClick={() => onOpenSpecApprovalModal(job)}
+                                className="mt-1.5 inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 rounded animate-pulse"
+                                title="The customer asked to change this order. Review it."
+                              >
+                                <AlertCircle className="w-3 h-3 text-amber-700" />
+                                Change request
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => onOpenSpecApprovalModal(job)}
+                                className="mt-1.5 inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded"
+                                title="Every change the customer asked for on this PO, before and after, and the decision"
+                              >
+                                Amendments ({(job.specChangeRequests || []).length})
+                              </button>
+                            )
                           )}
                         </td>
 
