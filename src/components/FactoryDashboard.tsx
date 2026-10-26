@@ -3,7 +3,10 @@ import { useProduction } from '../context/ProductionContext';
 import { MaterialInward, ProductionStatus } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { DailyProductionChart } from './DailyProductionChart';
+import { SIZE_MASTER_URL, sizeMasterLink } from '../utils/sizeMaster';
+import { exportJobsToExcel } from '../utils/excelExport';
 import {
+  FileSpreadsheet,
   Search,
   Filter,
   Calendar,
@@ -72,6 +75,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [customerFilter, setCustomerFilter] = useState<string>('ALL');
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   // Helper predicates for status categories
   const isJobClosed = (j: MaterialInward) =>
@@ -183,6 +187,20 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
     return matchesSearch && matchesStatus && matchesCustomer;
   }).sort((a, b) => poMatchRank(a) - poMatchRank(b));
 
+  // Excel: everything (closed POs too) unless a search or filter is narrowing the list
+  const isListNarrowed = !!query || statusFilter !== 'ALL' || customerFilter !== 'ALL';
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      await exportJobsToExcel(isListNarrowed ? filteredJobs : jobs, machines, floorStaff);
+    } catch (err) {
+      console.error(err);
+      alert('Could not create the Excel file. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const getDaysRemaining = (dateStr?: string) => {
     if (!dateStr) return null;
     const target = new Date(dateStr);
@@ -266,9 +284,9 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             </button>
           )}
 
-          {/* SlitSmart Size Master (separate site) for planning cuts on jobs the factory creates */}
+          {/* SlitSmart Size Master, empty, for planning cuts before an order is entered */}
           <a
-            href="https://slitflow.com"
+            href={SIZE_MASTER_URL}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold transition cursor-pointer"
@@ -558,7 +576,22 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
 
           {/* Action Buttons */}
           <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto justify-end">
-            
+
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting || jobs.length === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 rounded-lg text-xs font-bold border border-emerald-300 transition disabled:opacity-50"
+              title={
+                isListNarrowed
+                  ? `Download the ${filteredJobs.length} orders shown, with their challans and bundles, as an Excel file`
+                  : 'Download every order (closed POs too), with challans and bundles, as an Excel file'
+              }
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+              <span>{exporting ? 'Preparing…' : isListNarrowed ? `Export ${filteredJobs.length} to Excel` : 'Export to Excel'}</span>
+            </button>
+
             {/* Customer Filter */}
             <select
               value={customerFilter}
@@ -870,6 +903,16 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                                 <Package className="w-3.5 h-3.5 text-blue-600" />
                                 <span>Add Bundle Details ({job.bundles?.length || 0})</span>
                               </button>
+                              <a
+                                href={sizeMasterLink(job, machines, floorStaff)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition shadow-2xs"
+                                title="Open Size Master in a new tab with this order's roll and slit sizes filled in"
+                              >
+                                <Scissors className="w-3.5 h-3.5 text-amber-600" />
+                                <span>Plan Cuts</span>
+                              </a>
                             </div>
                           )}
 
