@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useProduction } from '../context/ProductionContext';
 import { MaterialInward, ProductionStatus } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { SIZE_MASTER_URL, sizeMasterLink } from '../utils/sizeMaster';
 import { exportJobsToExcel } from '../utils/excelExport';
-import { isMachineLocked } from '../utils/floorPlan';
+import { isMachineLocked, machineQueue, orderTargetKg, packedKg } from '../utils/floorPlan';
+import { formatKg } from '../utils/weight';
+import { AnimatedNumber } from './AnimatedNumber';
 import {
   FileSpreadsheet,
   Gauge,
@@ -19,7 +21,6 @@ import {
   AlertCircle,
   CheckCircle2,
   ChevronDown,
-  ChevronUp,
   Scale,
   Layers,
   ArrowRight,
@@ -79,6 +80,34 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
   const [customerFilter, setCustomerFilter] = useState<string>('ALL');
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [machineFilter, setMachineFilter] = useState<string>('ALL');
+  const [toast, setToast] = useState('');
+  const [flashIds, setFlashIds] = useState<string[]>([]);
+
+  // Briefly highlight an order when its stage changes, here or on another screen.
+  const lastStatus = useRef(new Map<string, ProductionStatus>());
+  useEffect(() => {
+    const changed = jobs.filter((j) => {
+      const before = lastStatus.current.get(j.id);
+      return before !== undefined && before !== j.status;
+    });
+    lastStatus.current = new Map(jobs.map((j) => [j.id, j.status]));
+    if (changed.length === 0) return;
+    setFlashIds(changed.map((j) => j.id));
+    const timer = setTimeout(() => setFlashIds([]), 950);
+    return () => clearTimeout(timer);
+  }, [jobs]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(''), 2800);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
+  const moveStage = (job: MaterialInward, status: ProductionStatus, note: string, message: string) => {
+    updateJobStatus(job.id, status, note);
+    setToast(`${job.customerPoNo} ${message}`);
+  };
 
   // Helper predicates for status categories
   const isJobClosed = (j: MaterialInward) =>
@@ -187,11 +216,19 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
     const matchesCustomer =
       customerFilter === 'ALL' || job.customerId === customerFilter;
 
-    return matchesSearch && matchesStatus && matchesCustomer;
+    const matchesMachine = machineFilter === 'ALL' || job.assignment?.machineId === machineFilter;
+
+    return matchesSearch && matchesStatus && matchesCustomer && matchesMachine;
   }).sort((a, b) => poMatchRank(a) - poMatchRank(b));
 
+  const activeMachines = machines
+    .filter((m) => m.active)
+    .sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }));
+  // New list = rows replay their entrance; typing in search or live updates don't.
+  const listKey = `${statusFilter}|${customerFilter}|${machineFilter}`;
+
   // Excel: everything (closed POs too) unless a search or filter is narrowing the list
-  const isListNarrowed = !!query || statusFilter !== 'ALL' || customerFilter !== 'ALL';
+  const isListNarrowed = !!query || statusFilter !== 'ALL' || customerFilter !== 'ALL' || machineFilter !== 'ALL';
   const handleExport = async () => {
     setExporting(true);
     try {
@@ -216,10 +253,10 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      
+    <div className="space-y-6 dash-motion">
+
       {/* Factory Operator Top Status Banner */}
-      <div className="bg-slate-900 text-white border border-slate-800 rounded-xl p-3 sm:p-4 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="dash-drop bg-slate-900 text-white border border-slate-800 rounded-xl p-3 sm:p-4 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
             <Factory className="w-5 h-5" />
@@ -331,14 +368,21 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
           <span className="text-xs font-bold uppercase tracking-wider text-slate-600">
             Today • {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })}
           </span>
-          {statusFilter !== 'ALL' && (
-            <button type="button" onClick={() => setStatusFilter('ALL')} className="text-xs font-bold text-blue-700">
+          {(statusFilter !== 'ALL' || machineFilter !== 'ALL') && (
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('ALL');
+                setMachineFilter('ALL');
+              }}
+              className="text-xs font-bold text-blue-700"
+            >
               Show all orders
             </button>
           )}
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-2">
-          {todayCards.map((card) => {
+          {todayCards.map((card, cardIndex) => {
             const matching = jobs.filter(todayChecks[card.key]);
             const active = statusFilter === card.key;
             return (
@@ -349,11 +393,12 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                   setStatusFilter(active ? 'ALL' : card.key);
                   document.getElementById('orders-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }}
-                className={`text-left rounded-xl border p-3 transition ${toneClasses[card.tone]} ${
-                  active ? 'ring-2 ring-blue-500' : 'hover:shadow-sm'
-                } ${matching.length === 0 ? 'opacity-60' : ''}`}
+                style={{ animationDelay: `${0.05 + cardIndex * 0.05}s` }}
+                className={`dash-rise dash-lift text-left rounded-xl border p-3 ${toneClasses[card.tone]} ${
+                  active ? 'ring-2 ring-blue-500' : ''
+                }`}
               >
-                <div className="text-2xl font-black leading-none">{matching.length}</div>
+                <AnimatedNumber value={matching.length} className={`block text-2xl font-black leading-none ${matching.length === 0 ? 'opacity-60' : ''}`} />
                 <div className="text-[11px] font-bold mt-1">{card.label}</div>
                 {matching.length > 0 && (
                   <div className="text-[10px] font-mono mt-1 truncate opacity-80">
@@ -367,18 +412,30 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
         </div>
       </div>
 
+      <div className="space-y-2">
+      {/* Where open orders are: the bar shifts as orders move along */}
+      {notTakenCount + inProductionCount + readyDispatchCount > 0 && (
+        <div className="dash-rise flex gap-1 h-2.5" style={{ animationDelay: '0.3s' }} aria-hidden="true">
+          <div className="dash-seg bg-amber-500 rounded-full min-w-0" style={{ flexGrow: notTakenCount, flexBasis: 0 }} title={`In queue: ${notTakenCount}`} />
+          <div className="dash-seg bg-blue-600 rounded-full min-w-0" style={{ flexGrow: inProductionCount, flexBasis: 0 }} title={`Under slitting: ${inProductionCount}`} />
+          <div className="dash-seg bg-emerald-600 rounded-full min-w-0" style={{ flexGrow: readyDispatchCount, flexBasis: 0 }} title={`Ready to dispatch: ${readyDispatchCount}`} />
+        </div>
+      )}
+
       {/* Top Banner & KPI Stat Cards - Clickable Interactive Filter Buttons */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-        
+
         {/* Total Inward Button */}
         <button
           type="button"
           onClick={() => {
             setStatusFilter('ALL');
+            setMachineFilter('ALL');
             setSearchQuery('');
             setCustomerFilter('ALL');
           }}
-          className={`text-left rounded-xl p-3.5 shadow-2xs border transition-all cursor-pointer ${
+          style={{ animationDelay: '0.32s' }}
+          className={`dash-rise dash-lift text-left rounded-xl p-3.5 shadow-2xs border cursor-pointer ${
             statusFilter === 'ALL'
               ? 'bg-blue-50/80 border-blue-400 ring-2 ring-blue-500 shadow-sm'
               : 'bg-white border-slate-200 hover:border-blue-300 hover:bg-slate-50/70'
@@ -398,7 +455,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             </span>
           </div>
           <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="text-xl font-black text-slate-900">{totalInwardCount}</span>
+            <AnimatedNumber value={totalInwardCount} className="text-xl font-black text-slate-900" />
             <span className="text-xs text-slate-500">{(totalIncomingWeight / 1000).toFixed(1)} MT</span>
           </div>
           <div className="flex items-center justify-between mt-1">
@@ -415,7 +472,8 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
         <button
           type="button"
           onClick={() => setStatusFilter(statusFilter === 'IN_QUEUE' ? 'ALL' : 'IN_QUEUE')}
-          className={`text-left rounded-xl p-3.5 shadow-2xs border transition-all cursor-pointer ${
+          style={{ animationDelay: '0.37s' }}
+          className={`dash-rise dash-lift text-left rounded-xl p-3.5 shadow-2xs border cursor-pointer ${
             statusFilter === 'IN_QUEUE'
               ? 'bg-amber-50/80 border-amber-400 ring-2 ring-amber-500 shadow-sm'
               : 'bg-white border-slate-200 hover:border-amber-300 hover:bg-slate-50/70'
@@ -435,7 +493,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             </span>
           </div>
           <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="text-xl font-black text-slate-800">{notTakenCount}</span>
+            <AnimatedNumber value={notTakenCount} className="text-xl font-black text-slate-800" />
             {pendingEddCount > 0 && (
               <span className="text-[9px] bg-amber-100 text-amber-800 font-bold px-1 py-0.2 rounded">
                 {pendingEddCount} No EDD
@@ -456,7 +514,8 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
         <button
           type="button"
           onClick={() => setStatusFilter(statusFilter === 'UNDER_SLITTING' ? 'ALL' : 'UNDER_SLITTING')}
-          className={`text-left rounded-xl p-3.5 shadow-2xs border transition-all cursor-pointer ${
+          style={{ animationDelay: '0.42s' }}
+          className={`dash-rise dash-lift text-left rounded-xl p-3.5 shadow-2xs border cursor-pointer ${
             statusFilter === 'UNDER_SLITTING'
               ? 'bg-blue-100/70 border-blue-400 ring-2 ring-blue-500 shadow-sm'
               : 'bg-white border-blue-200 hover:border-blue-400 bg-gradient-to-br from-white to-blue-50/40'
@@ -476,7 +535,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             </span>
           </div>
           <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="text-xl font-black text-blue-700">{inProductionCount}</span>
+            <AnimatedNumber value={inProductionCount} className="text-xl font-black text-blue-700" />
             <span className="text-xs text-blue-600 font-medium">Active</span>
           </div>
           <div className="flex items-center justify-between mt-1">
@@ -493,7 +552,8 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
         <button
           type="button"
           onClick={() => setStatusFilter(statusFilter === 'READY_DISPATCH' ? 'ALL' : 'READY_DISPATCH')}
-          className={`text-left rounded-xl p-3.5 shadow-2xs border transition-all cursor-pointer ${
+          style={{ animationDelay: '0.47s' }}
+          className={`dash-rise dash-lift text-left rounded-xl p-3.5 shadow-2xs border cursor-pointer ${
             statusFilter === 'READY_DISPATCH'
               ? 'bg-emerald-100/70 border-emerald-400 ring-2 ring-emerald-500 shadow-sm'
               : 'bg-white border-emerald-200 hover:border-emerald-400 bg-gradient-to-br from-white to-emerald-50/40'
@@ -513,7 +573,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             </span>
           </div>
           <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="text-xl font-black text-emerald-700">{readyDispatchCount}</span>
+            <AnimatedNumber value={readyDispatchCount} className="text-xl font-black text-emerald-700" />
             <span className="text-xs text-emerald-600 font-medium">Packed</span>
           </div>
           <div className="flex items-center justify-between mt-1">
@@ -530,7 +590,8 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
         <button
           type="button"
           onClick={() => setStatusFilter(statusFilter === 'PO_CLOSED' ? 'ALL' : 'PO_CLOSED')}
-          className={`text-left rounded-xl p-3.5 shadow-2xs border transition-all cursor-pointer ${
+          style={{ animationDelay: '0.52s' }}
+          className={`dash-rise dash-lift text-left rounded-xl p-3.5 shadow-2xs border cursor-pointer ${
             statusFilter === 'PO_CLOSED'
               ? 'bg-red-50/90 border-red-400 ring-2 ring-red-500 shadow-sm'
               : 'bg-white border-slate-200 hover:border-red-300 hover:bg-red-50/30'
@@ -550,7 +611,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             </span>
           </div>
           <div className="mt-2 flex items-baseline gap-1.5">
-            <span className="text-xl font-black text-slate-900">{closedPoCount}</span>
+            <AnimatedNumber value={closedPoCount} className="text-xl font-black text-slate-900" />
             <span className="text-xs text-slate-500 font-medium">Closed</span>
           </div>
           <div className="flex items-center justify-between mt-1">
@@ -564,6 +625,50 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
         </button>
 
       </div>
+      </div>
+
+      {/* On the machines: click one to list its orders */}
+      {activeMachines.length > 0 && (
+        <div>
+          <div className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-2 px-0.5">On the machines</div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+            {activeMachines.map((m, i) => {
+              const [current, ...next] = machineQueue(jobs, m.id);
+              const running = current?.status === 'in_production';
+              const active = machineFilter === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    setMachineFilter(active ? 'ALL' : m.id);
+                    setStatusFilter('ALL');
+                  }}
+                  aria-pressed={active}
+                  style={{ animationDelay: `${0.5 + Math.min(i, 11) * 0.03}s` }}
+                  className={`dash-rise dash-lift text-left rounded-xl border p-2.5 ${
+                    running ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-slate-200'
+                  } ${active ? 'ring-2 ring-blue-500' : ''}`}
+                >
+                  <span className="flex items-center justify-between gap-1">
+                    <span className="font-mono text-xs font-black text-slate-900 truncate">{m.number}</span>
+                    <span
+                      className={`shrink-0 w-2 h-2 rounded-full ${
+                        running ? 'bg-emerald-500 dash-running-dot' : current ? 'bg-amber-500' : 'bg-slate-300'
+                      }`}
+                      title={running ? 'Running' : current ? 'Set up' : 'Idle'}
+                    />
+                  </span>
+                  <span className="block mt-1 text-[11px] font-mono font-semibold text-slate-700 truncate">
+                    {current ? current.customerPoNo : <span className="font-sans font-normal text-slate-500">Idle</span>}
+                  </span>
+                  {next.length > 0 && <span className="block text-[10px] text-slate-500">+{next.length} lined up</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Primary Actions & Customer Directory Access */}
       <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3">
@@ -656,7 +761,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-slate-200">
+            <tbody key={listKey} className="divide-y divide-slate-200">
               {filteredJobs.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center text-slate-400">
@@ -667,7 +772,18 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredJobs.map((job) => {
+                filteredJobs.map((job, rowIndex) => {
+                  const targetKg = orderTargetKg(job);
+                  const doneKg = packedKg(job);
+                  const donePct = targetKg > 0 ? Math.min(100, Math.round((doneKg / targetKg) * 100)) : 0;
+                  const stageStep =
+                    job.status === 'received' || job.status === 'pending_production'
+                      ? 0
+                      : job.status === 'in_production'
+                      ? 1
+                      : job.status === 'slitting_completed' || job.status === 'ready_for_dispatch'
+                      ? 2
+                      : 3;
                   const daysLeft = getDaysRemaining(job.estimatedDeliveryDate);
                   const isExpanded = expandedJobId === job.id;
                   const customer = customers.find((c) => c.id === job.customerId);
@@ -681,7 +797,8 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                   return (
                     <React.Fragment key={job.id}>
                       <tr
-                        className={`hover:bg-slate-50/80 transition ${
+                        style={{ animationDelay: `${Math.min(rowIndex, 8) * 0.05}s` }}
+                        className={`dash-rise ${flashIds.includes(job.id) ? 'dash-flash' : ''} hover:bg-slate-50/80 transition ${
                           isExpanded ? 'bg-blue-50/30' : ''
                         } ${isPermanentlyClosed ? 'bg-slate-50/40' : ''}`}
                       >
@@ -693,11 +810,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                               className="text-slate-400 hover:text-slate-700 p-0.5 rounded transition"
                               title="Toggle full customer, bundling, and challan details"
                             >
-                              {isExpanded ? (
-                                <ChevronUp className="w-3.5 h-3.5" />
-                              ) : (
-                                <ChevronDown className="w-3.5 h-3.5" />
-                              )}
+                              <ChevronDown className={`dash-chevron w-3.5 h-3.5 ${isExpanded ? 'rotate-180' : ''}`} />
                             </button>
                             {/* The customer PO is the main reference for every order */}
                             <span className="font-mono font-bold text-blue-800 text-[13px]">
@@ -766,6 +879,28 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                         <td className="py-3.5 px-4 align-top">
                           <StatusBadge status={job.status} />
 
+                          {/* Packed so far against what the order needs */}
+                          {!isPermanentlyClosed && (
+                            <div
+                              className="mt-1.5 w-44 max-w-full"
+                              role="img"
+                              aria-label={`${formatKg(doneKg)} of ${formatKg(targetKg)} kg packed`}
+                              title={`${formatKg(doneKg)} of ${formatKg(targetKg)} kg packed`}
+                            >
+                              <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                <div
+                                  className={`dash-bar h-full rounded-full ${
+                                    job.status === 'in_production' ? 'dash-running-bar bg-blue-600' : stageStep >= 2 ? 'bg-emerald-600' : 'bg-slate-500'
+                                  }`}
+                                  style={{ width: `${donePct}%` }}
+                                />
+                              </div>
+                              <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
+                                {donePct}% packed
+                              </div>
+                            </div>
+                          )}
+
                           {/* Machine and team (optional) */}
                           {onOpenAssignModal && !isPermanentlyClosed && (
                             <button
@@ -807,7 +942,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                             <div className="mt-2 flex items-center gap-1">
                               {job.status === 'received' && (
                                 <button
-                                  onClick={() => updateJobStatus(job.id, 'pending_production', 'Moved to production queue')}
+                                  onClick={() => moveStage(job, 'pending_production', 'Moved to production queue', 'moved to the production queue.')}
                                   className="text-[10px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded border border-slate-300"
                                 >
                                   Queue
@@ -816,7 +951,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
 
                               {(job.status === 'received' || job.status === 'pending_production') && (
                                 <button
-                                  onClick={() => updateJobStatus(job.id, 'in_production', 'Mounted on slitter machine')}
+                                  onClick={() => moveStage(job, 'in_production', 'Mounted on slitter machine', 'is now under slitting.')}
                                   className="text-[10px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200"
                                 >
                                   Start Slit
@@ -825,7 +960,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
 
                               {job.status === 'in_production' && (
                                 <button
-                                  onClick={() => updateJobStatus(job.id, 'ready_for_dispatch', 'Slitting & bundling completed')}
+                                  onClick={() => moveStage(job, 'ready_for_dispatch', 'Slitting & bundling completed', 'is ready to dispatch.')}
                                   className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200"
                                 >
                                   Mark Ready
@@ -834,7 +969,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
 
                               {job.status === 'slitting_completed' && (
                                 <button
-                                  onClick={() => updateJobStatus(job.id, 'ready_for_dispatch', 'Packing completed')}
+                                  onClick={() => moveStage(job, 'ready_for_dispatch', 'Packing completed', 'is ready to dispatch.')}
                                   className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200"
                                 >
                                   Mark Ready
@@ -1017,8 +1152,25 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                       {isExpanded && (
                         <tr className="bg-slate-50/90 border-b-2 border-slate-200">
                           <td colSpan={6} className="p-4">
-                            <div className="bg-white rounded-lg border border-slate-200 p-4 space-y-4">
-                              
+                            <div className="dash-reveal bg-white rounded-lg border border-slate-200 p-4 space-y-4">
+
+                              {/* Where this order has reached */}
+                              <ol className="flex max-w-xl">
+                                {['Received', 'Slitting', 'Packed', 'Dispatched'].map((label, step) => (
+                                  <li key={label} className="flex-1 min-w-0">
+                                    <div className="flex items-center">
+                                      <span
+                                        className={`shrink-0 rounded-full w-3 h-3 ${step <= stageStep ? 'bg-blue-600' : 'bg-slate-300'} ${
+                                          step === stageStep ? 'scale-125' : ''
+                                        }`}
+                                      />
+                                      {step < 3 && <span className={`flex-1 h-0.5 ${step < stageStep ? 'bg-blue-600' : 'bg-slate-300'}`} />}
+                                    </div>
+                                    <div className={`mt-1 text-[11px] ${step === stageStep ? 'font-bold text-slate-900' : 'text-slate-500'}`}>{label}</div>
+                                  </li>
+                                ))}
+                              </ol>
+
                               {/* Customer Registered Details & Multiple Authorized Email IDs */}
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs">
                                 <div>
@@ -1222,6 +1374,14 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
         </div>
       </div>
 
+      {toast && (
+        <div
+          role="status"
+          className="dash-toast no-print fixed right-4 bottom-4 z-40 max-w-sm px-4 py-3 bg-slate-900 text-white rounded-xl text-sm font-semibold shadow-xl"
+        >
+          {toast}
+        </div>
+      )}
     </div>
   );
 };
