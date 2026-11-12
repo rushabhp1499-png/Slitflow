@@ -61,6 +61,17 @@ export class TableSync<T extends { id: string }> {
     }
   }
 
+  // Deletes a record. Returns an error message, or null once it is gone.
+  async remove(id: string): Promise<string | null> {
+    const { data, error } = await getSupabase().from(this.opts.table).delete().eq('id', id).select('id');
+    if (error) return errorMessage(error);
+    if (!data || data.length === 0) return 'Only the owner or developer login can delete this.';
+    this.known.delete(id);
+    this.dirty.delete(id);
+    this.opts.setLocal(prev => prev.filter(i => i.id !== id));
+    return null;
+  }
+
   // Called when Realtime reports a change made elsewhere.
   receiveRemote(id: string) {
     if (this.inFlight.has(id) || this.dirty.has(id)) return;

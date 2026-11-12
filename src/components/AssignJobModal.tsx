@@ -12,9 +12,11 @@ interface AssignJobModalProps {
 
 // Optional: pick the machine and operator for an order. Helpers are arranged by the manager on the floor.
 export const AssignJobModal: React.FC<AssignJobModalProps> = ({ job, onClose, onOpenFloorSetup }) => {
-  const { machines, floorStaff, assignJob, floorSetupMissing } = useProduction();
+  const { machines, floorStaff, assignJob, floorSetupMissing, isAdmin } = useProduction();
   const current = job.assignment;
-  const machineLocked = isMachineLocked(job);
+  const started = isMachineLocked(job);
+  // The owner/developer can still move a started order to another machine.
+  const machineLocked = started && !isAdmin;
 
   const [machineId, setMachineId] = useState(current?.machineId || '');
   const [operatorId, setOperatorId] = useState(current?.operatorId || '');
@@ -82,6 +84,10 @@ export const AssignJobModal: React.FC<AssignJobModalProps> = ({ job, onClose, on
                 {machineLocked ? (
                   <p className="text-[11px] text-amber-800 mt-1 flex items-center gap-1">
                     <Lock className="w-3 h-3" /> Production has started, so the machine can't be changed.
+                  </p>
+                ) : started ? (
+                  <p className="text-[11px] text-amber-800 mt-1">
+                    Production has started. Only your login can move it to another machine.
                   </p>
                 ) : (
                   <p className="text-[11px] text-slate-500 mt-1">

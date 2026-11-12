@@ -258,12 +258,33 @@ begin
     raise exception 'A bundle is already on another challan. Each bundle can only be dispatched once.';
   end if;
 
-  -- Once slitting has started, the order stays on its machine: nobody can clear or change it.
+  -- Once slitting has started, the order stays on its machine: only the owner and developer can change it.
   if coalesce(old.data ->> 'status', 'received') not in ('received', 'pending_production')
      and nullif(old.data #>> '{assignment,machineId}', '') is not null
-     and (new.data #>> '{assignment,machineId}') is distinct from (old.data #>> '{assignment,machineId}') then
+     and (new.data #>> '{assignment,machineId}') is distinct from (old.data #>> '{assignment,machineId}')
+     and not public.is_admin() then
     raise exception 'Production has started for PO %, so its machine cannot be changed.', old.data ->> 'customerPoNo';
   end if;
+
+  -- Only the owner and developer can move an order to another customer or change its PO number,
+  -- and a PO number still never repeats for a customer.
+  if new.customer_id is distinct from old.customer_id
+     or lower(trim(coalesce(new.data ->> 'customerPoNo', ''))) is distinct from lower(trim(coalesce(old.data ->> 'customerPoNo', ''))) then
+    if not public.is_admin() then
+      raise exception 'Only the owner or developer login can change an order''s customer or PO number.';
+    end if;
+    po_no := nullif(trim(coalesce(new.data ->> 'customerPoNo', '')), '');
+    if po_no is null then
+      raise exception 'The PO number cannot be blank.';
+    end if;
+    if exists (
+      select 1 from jobs
+      where customer_id = new.customer_id and id <> old.id and lower(trim(data ->> 'customerPoNo')) = lower(po_no)
+    ) then
+      raise exception 'PO number % has already been used for this customer. Please use a different PO number.', po_no;
+    end if;
+  end if;
+  new.data := new.data || jsonb_build_object('customerId', new.customer_id);
   return new;
 end;
 $$;
@@ -1096,6 +1117,132 @@ revoke execute on function public.whatsapp_test(text) from public, anon, authent
 
 -- Replies from Meta for the last messages (to check delivery problems):
 -- select id, status_code, content, created from net._http_response order by id desc limit 10;
+
+-- =====================================================================
+-- 10. Admin powers for the owner and developer logins
+--     They can delete orders and customers, move a started order to
+--     another machine, change an order's customer or PO number, and
+--     manage factory logins. Logins themselves (passwords) are created
+--     by the admin-users Edge Function. Safe to run again.
+-- =====================================================================
+
+create or replace function public.is_admin()
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select coalesce(public.my_staff_role() in ('owner', 'developer'), false);
+$$;
+revoke execute on function public.is_admin() from public, anon;
+grant execute on function public.is_admin() to authenticated;
+
+-- Deleting orders and customers: owner and developer only.
+drop policy if exists jobs_staff_delete on public.jobs;
+drop policy if exists jobs_admin_delete on public.jobs;
+create policy jobs_admin_delete on public.jobs for delete to authenticated
+  using (public.is_admin());
+drop policy if exists customers_staff_delete on public.customers;
+drop policy if exists customers_admin_delete on public.customers;
+create policy customers_admin_delete on public.customers for delete to authenticated
+  using (public.is_admin());
+
+-- A deleted order takes its notifications with it.
+create or replace function public.jobs_after_delete()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  delete from notifications where data ->> 'jobId' = old.id;
+  return null;
+end;
+$$;
+drop trigger if exists jobs_after_delete on public.jobs;
+create trigger jobs_after_delete after delete on public.jobs
+for each row execute function public.jobs_after_delete();
+
+-- A customer can only be deleted once it has no orders.
+create or replace function public.customers_before_delete()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  if exists (select 1 from jobs where customer_id = old.id) then
+    raise exception 'This customer still has orders. Delete those orders or move them to another customer first.';
+  end if;
+  delete from notifications where customer_id = old.id;
+  return old;
+end;
+$$;
+drop trigger if exists customers_before_delete on public.customers;
+create trigger customers_before_delete before delete on public.customers
+for each row execute function public.customers_before_delete();
+
+-- Factory logins: owner and developer can add, change and remove them.
+grant insert, update, delete on public.staff_emails to authenticated;
+drop policy if exists staff_emails_admin_insert on public.staff_emails;
+create policy staff_emails_admin_insert on public.staff_emails for insert to authenticated
+  with check (public.is_admin());
+drop policy if exists staff_emails_admin_update on public.staff_emails;
+create policy staff_emails_admin_update on public.staff_emails for update to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+drop policy if exists staff_emails_admin_delete on public.staff_emails;
+create policy staff_emails_admin_delete on public.staff_emails for delete to authenticated
+  using (public.is_admin());
+
+-- Nobody can lock themselves out, and an email stays the same once added.
+create or replace function public.staff_emails_guard()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+declare
+  me text := lower(auth.jwt() ->> 'email');
+begin
+  if tg_op = 'INSERT' then
+    new.email := lower(trim(new.email));
+    if exists (select 1 from customers where new.email = any (authorized_emails)) then
+      raise exception 'This email is a customer login. Use a different email for a factory login.';
+    end if;
+    return new;
+  end if;
+  if tg_op = 'UPDATE' and new.email is distinct from old.email then
+    raise exception 'The email of a login cannot be changed. Remove it and add the new email instead.';
+  end if;
+  if old.email = me and (tg_op = 'DELETE' or new.staff_role is distinct from old.staff_role) then
+    raise exception 'You cannot remove your own login or change your own role.';
+  end if;
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists staff_emails_guard on public.staff_emails;
+create trigger staff_emails_guard before insert or update or delete on public.staff_emails
+for each row execute function public.staff_emails_guard();
+
+-- Removing a factory login ends its access at once, and every change is in the activity log.
+create or replace function public.staff_emails_after()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  if tg_op = 'DELETE' then
+    delete from profiles where email = old.email and role = 'staff';
+    perform write_audit('staff_login_removed', 'staff_login', old.email, coalesce(old.display_name, old.email),
+      'Factory login removed: ' || old.email);
+  elsif tg_op = 'INSERT' then
+    perform write_audit('staff_login_added', 'staff_login', new.email, coalesce(new.display_name, new.email),
+      'Factory login added: ' || new.email || ' (' || new.staff_role || ')');
+  elsif new is distinct from old then
+    perform write_audit('staff_login_changed', 'staff_login', new.email, coalesce(new.display_name, new.email),
+      'Factory login ' || new.email || ' changed: role ' || old.staff_role || ' → ' || new.staff_role
+        || ', name ' || coalesce(old.display_name, '-') || ' → ' || coalesce(new.display_name, '-'));
+  end if;
+  return null;
+end;
+$$;
+drop trigger if exists staff_emails_after on public.staff_emails;
+create trigger staff_emails_after after insert or update or delete on public.staff_emails
+for each row execute function public.staff_emails_after();
 
 -- The three factory logins. Change the emails / names, then run.
 -- (Each person also needs a user in Authentication -> Users.)

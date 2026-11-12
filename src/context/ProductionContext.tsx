@@ -30,6 +30,35 @@ import { isMachineLocked, machineQueue, planOrder } from '../utils/floorPlan';
 
 type AuthResult = { success: boolean; message: string };
 
+// Order details the owner/developer can change after entry.
+export type AdminOrderChanges = Partial<
+  Pick<
+    MaterialInward,
+    | 'customerId'
+    | 'customerPoNo'
+    | 'inwardChallanNo'
+    | 'vehicleNo'
+    | 'receivedDate'
+    | 'materialType'
+    | 'grade'
+    | 'thickness'
+    | 'thicknessUnit'
+    | 'incomingWidth'
+    | 'incomingLength'
+    | 'incomingWeight'
+    | 'coilsOrRollsCount'
+    | 'customerInstructions'
+    | 'status'
+  >
+>;
+
+// A sign-in account as the Users screen shows it.
+export interface LoginInfo {
+  email: string;
+  lastSignInAt: string | null;
+  createdAt: string;
+}
+
 interface Account {
   role: 'staff' | 'customer';
   customerId: string | null;
@@ -101,6 +130,15 @@ interface ProductionContextType {
 
   // Factory staff authentication (emails listed in the staff_emails table)
   staffRole: 'manager' | 'owner' | 'developer' | null; // which factory login this is
+  isAdmin: boolean; // owner or developer: may edit and delete anything and manage logins
+  adminUpdateOrder: (jobId: string, changes: AdminOrderChanges, reason: string) => void;
+  deleteOrder: (jobId: string) => Promise<AuthResult>;
+  deleteCustomer: (customerId: string) => Promise<AuthResult>;
+  manageLogins: (
+    action: 'list' | 'create' | 'set_password' | 'delete',
+    email?: string,
+    password?: string
+  ) => Promise<AuthResult & { users?: LoginInfo[] }>;
   staffName: string | null; // display name stamped on records
   isFactoryAuthenticated: boolean;
   loginFactory: (email: string, password: string) => Promise<AuthResult>;
@@ -332,6 +370,8 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const isFactoryAuthenticated = account?.role === 'staff';
   const [staffRole, setStaffRole] = useState<ProductionContextType['staffRole']>(null);
   const [staffName, setStaffName] = useState<string | null>(null);
+  // Owner and developer can edit and delete anything and manage logins (the database enforces the same rule).
+  const isAdmin = staffRole === 'owner' || staffRole === 'developer';
   // Name stamped on records (weighed by, prepared by, ...): the staff member's name, else their email.
   const actorName = staffName || signedInEmail || 'Factory';
   const authenticatedEmail = account?.role === 'customer' ? signedInEmail : null;
@@ -653,8 +693,8 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     setJobs(prev =>
       prev.map(j => {
         if (j.id !== jobId) return j;
-        // Slitting has started: the machine stays; only the operator can change.
-        if (isMachineLocked(j)) {
+        // Slitting has started: the machine stays (except for the owner/developer); only the operator can change.
+        if (isMachineLocked(j) && !isAdmin) {
           if (!assignment) return j;
           assignment = { ...assignment, machineId: j.assignment!.machineId };
         }
@@ -1031,6 +1071,77 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         };
       })
     );
+  };
+
+  // Owner/developer: change any detail of an order. The reason is saved on the order and in the activity log.
+  const adminUpdateOrder: ProductionContextType['adminUpdateOrder'] = (jobId, changes, reason) => {
+    const nowIso = new Date().toISOString();
+    const newCustomer = changes.customerId ? customers.find(c => c.id === changes.customerId) : undefined;
+    setJobs(prev =>
+      prev.map(j => {
+        if (j.id !== jobId) return j;
+        const next: MaterialInward = {
+          ...j,
+          ...changes,
+          updatedAt: nowIso,
+          lastAdminEdit: { at: nowIso, by: actorName, reason },
+        };
+        if (newCustomer && newCustomer.id !== j.customerId) {
+          next.customerName = newCustomer.companyName;
+          next.customerGst = newCustomer.gstNumber;
+          next.customerEmail = newCustomer.email;
+          next.authorizedEmails = newCustomer.authorizedEmails?.length ? newCustomer.authorizedEmails : [newCustomer.email];
+          next.customerPhone = newCustomer.phone;
+          next.customerRegisteredAddress = newCustomer.registeredAddress;
+        }
+        next.remainingWeightKg = Math.max(0, Number(((next.incomingWeight || 0) - (next.dispatchedWeightKg || 0)).toFixed(2)));
+        if (changes.status && changes.status !== j.status) {
+          if (changes.status === 'po_closed') {
+            next.poStatus = 'closed';
+            next.poClosedAt = nowIso;
+            next.poClosedBy = actorName;
+          } else if (j.poStatus === 'closed') {
+            next.poStatus = next.dispatchedWeightKg > 0 ? 'partially_dispatched' : 'open';
+          }
+          if (changes.status === 'in_production' && !j.productionStartedAt) next.productionStartedAt = nowIso;
+        }
+        return next;
+      })
+    );
+  };
+
+  const deleteOrder: ProductionContextType['deleteOrder'] = async (jobId) => {
+    const error = await jobsSync.remove(jobId);
+    if (error) return { success: false, message: error };
+    setNotifications(prev => prev.filter(n => n.jobId !== jobId));
+    return { success: true, message: 'Order deleted' };
+  };
+
+  const deleteCustomer: ProductionContextType['deleteCustomer'] = async (customerId) => {
+    if (jobs.some(j => j.customerId === customerId)) {
+      return { success: false, message: 'This customer still has orders. Delete those orders or move them to another customer first.' };
+    }
+    const error = await customersSync.remove(customerId);
+    if (error) return { success: false, message: error };
+    setNotifications(prev => prev.filter(n => n.customerId !== customerId));
+    setSelectedCustomerId(prev => (prev === customerId ? '' : prev));
+    return { success: true, message: 'Customer deleted' };
+  };
+
+  // Logins with passwords, through the admin-users Edge Function (owner/developer only).
+  const manageLogins: ProductionContextType['manageLogins'] = async (action, email, password) => {
+    const { data, error } = await getSupabase().functions.invoke('admin-users', { body: { action, email, password } });
+    if (error) {
+      let message = errorMessage(error);
+      try {
+        const body = await (error as { context?: Response }).context?.json();
+        if (body?.error) message = body.error;
+      } catch {
+        // keep the general message
+      }
+      return { success: false, message };
+    }
+    return { success: true, message: 'Done', users: data?.users };
   };
 
   // Add Inward Material
@@ -2324,6 +2435,11 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         importLocalBrowserData,
         dismissLocalImport,
         staffRole,
+        isAdmin,
+        adminUpdateOrder,
+        deleteOrder,
+        deleteCustomer,
+        manageLogins,
         staffName,
         machines,
         floorStaff,

@@ -33,8 +33,12 @@ import {
   Building2,
   Share2,
   Package,
-  Factory
+  Factory,
+  Pencil,
+  KeyRound
 } from 'lucide-react';
+import { EditOrderModal } from './EditOrderModal';
+import { UsersModal } from './UsersModal';
 
 interface FactoryDashboardProps {
   onOpenInwardModal: () => void;
@@ -70,10 +74,15 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
     customers,
     machines,
     floorStaff,
-    staffRole,
+    isAdmin,
     updateJobStatus,
     reopenCustomerPo,
   } = useProduction();
+
+  // Owner / developer windows. The order is looked up live so the window follows saved changes.
+  const [editJobId, setEditJobId] = useState<string | null>(null);
+  const editJob = editJobId ? jobs.find((j) => j.id === editJobId) || null : null;
+  const [usersOpen, setUsersOpen] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -288,7 +297,19 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
           )}
 
           {/* Who changed what: top management and developer only */}
-          {onOpenActivityLog && (staffRole === 'owner' || staffRole === 'developer') && (
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setUsersOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-900 rounded-lg text-xs font-bold transition"
+              title="Factory and customer logins: add, set passwords, remove"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>Users & Logins</span>
+            </button>
+          )}
+
+          {onOpenActivityLog && isAdmin && (
             <button
               type="button"
               onClick={onOpenActivityLog}
@@ -1035,7 +1056,22 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
 
                         {/* Factory Operations: Bundle Details, Challan & PO Close */}
                         <td className="py-3.5 px-4 align-top text-right space-y-1.5">
-                          
+
+                          {/* Owner / developer: correct or delete the order */}
+                          {isAdmin && (
+                            <div>
+                              <button
+                                type="button"
+                                onClick={() => setEditJobId(job.id)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-800 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg transition shadow-2xs cursor-pointer"
+                                title="Change any detail of this order, or delete it"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-slate-600" />
+                                <span>Edit / Delete</span>
+                              </button>
+                            </div>
+                          )}
+
                           {/* Add Bundle Details Dialog */}
                           {!isPermanentlyClosed && (
                             <div className="flex flex-col gap-1 items-end">
@@ -1382,6 +1418,9 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
           {toast}
         </div>
       )}
+
+      {editJob && <EditOrderModal job={editJob} onClose={() => setEditJobId(null)} />}
+      {usersOpen && <UsersModal onClose={() => setUsersOpen(false)} />}
     </div>
   );
 };

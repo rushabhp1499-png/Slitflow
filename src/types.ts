@@ -355,6 +355,9 @@ export interface MaterialInward {
   // Customer Specification Change Requests & Backtrack
   specChangeRequests?: SpecChangeRequest[];
 
+  // Last correction by the owner/developer login (full history is in the activity log)
+  lastAdminEdit?: { at: string; by: string; reason: string };
+
   // Metadata
   createdAt: string;
   updatedAt: string;
