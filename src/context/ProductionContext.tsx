@@ -1234,18 +1234,18 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const existingChallansCount = job.challans ? job.challans.length : (job.challan ? 1 : 0);
     const sequenceNumber = existingChallansCount + 1;
     
-    // Challan number formatting: e.g. PE/DC/2026/0415-P1 or PE/DC/2026/0415
+    // Challan number formatting: e.g. PE/DC/2026/001-P1 or PE/DC/2026/001, the year being today's.
     // Continues from the highest number already issued, so deleted challans never cause duplicates.
     const highestChallanNum = jobs.reduce((max, j) => {
       return (j.challans || []).reduce((m, c) => {
         const match = c.challanNo.match(/^PE\/DC\/\d{4}\/0*(\d+)/);
         return match ? Math.max(m, Number(match[1])) : m;
       }, max);
-    }, 415);
-    const baseChallanNum = highestChallanNum + 1;
+    }, 0);
+    const baseChallanNo = `PE/DC/${new Date().getFullYear()}/${String(highestChallanNum + 1).padStart(3, '0')}`;
     const challanNo = params.dispatchType === 'partial'
-      ? `PE/DC/2026/0${baseChallanNum}-P${sequenceNumber}`
-      : `PE/DC/2026/0${baseChallanNum}`;
+      ? `${baseChallanNo}-P${sequenceNumber}`
+      : baseChallanNo;
 
     const todayStr = new Date().toISOString().split('T')[0];
     const nowIso = new Date().toISOString();
