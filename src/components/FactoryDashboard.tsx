@@ -39,6 +39,7 @@ import {
 } from 'lucide-react';
 import { EditOrderModal } from './EditOrderModal';
 import { UsersModal } from './UsersModal';
+import { ProMaskModal } from './ProMaskModal';
 
 interface FactoryDashboardProps {
   onOpenInwardModal: () => void;
@@ -83,6 +84,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
   const [editJobId, setEditJobId] = useState<string | null>(null);
   const editJob = editJobId ? jobs.find((j) => j.id === editJobId) || null : null;
   const [usersOpen, setUsersOpen] = useState(false);
+  const [proMaskOpen, setProMaskOpen] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -320,6 +322,16 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
               <span>Activity Log</span>
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => setProMaskOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-bold transition"
+            title="SLT-01 masking paper: what to run for open POs, stock and output, read from the QMS Excel"
+          >
+            <Layers className="w-3.5 h-3.5 text-orange-400" />
+            <span>ProMask SLT-01</span>
+          </button>
 
           {onOpenEfficiency && (
             <button
@@ -1421,6 +1433,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
 
       {editJob && <EditOrderModal job={editJob} onClose={() => setEditJobId(null)} />}
       {usersOpen && <UsersModal onClose={() => setUsersOpen(false)} />}
+      {proMaskOpen && <ProMaskModal onClose={() => setProMaskOpen(false)} />}
     </div>
   );
 };
