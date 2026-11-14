@@ -34,7 +34,12 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
     addAuthorizedEmail,
     removeAuthorizedEmail,
     jobs,
+    isAdmin,
+    deleteCustomer,
   } = useProduction();
+
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(
     customers[0]?.id || ''
@@ -127,6 +132,17 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
   };
 
   const customerJobsCount = jobs.filter((j) => j.customerId === selectedCustomer?.id).length;
+
+  const handleDeleteCustomer = async () => {
+    if (!selectedCustomer) return;
+    if (!window.confirm(`Delete ${selectedCustomer.companyName}? This cannot be undone.`)) return;
+    setDeleting(true);
+    setDeleteError('');
+    const result = await deleteCustomer(selectedCustomer.id);
+    setDeleting(false);
+    if (!result.success) return setDeleteError(result.message);
+    setSelectedCustomerId(customers.find((c) => c.id !== selectedCustomer.id)?.id || '');
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto no-print">
@@ -573,6 +589,35 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
                     </button>
                   </div>
                 </form>
+
+                {/* Owner / developer only: remove a customer that has no orders */}
+                {isAdmin && (
+                  <div className="border border-red-200 bg-red-50/40 rounded-xl p-4">
+                    <h4 className="text-xs font-bold text-red-700 uppercase tracking-wider mb-1">Delete this customer</h4>
+                    {customerJobsCount > 0 ? (
+                      <p className="text-xs text-slate-600">
+                        {selectedCustomer.companyName} has {customerJobsCount} order(s). Delete those orders, or move them to
+                        another customer with Edit / Delete on the dashboard, before deleting the customer.
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-xs text-slate-600 mb-2">
+                          Removes {selectedCustomer.companyName} and all its logins' access. This cannot be undone; a copy stays
+                          in the Activity Log.
+                        </p>
+                        <button
+                          type="button"
+                          disabled={deleting}
+                          onClick={handleDeleteCustomer}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-slate-300 text-white rounded-lg text-xs font-bold"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> {deleting ? 'Deleting…' : 'Delete customer'}
+                        </button>
+                      </>
+                    )}
+                    {deleteError && <p className="text-xs font-semibold text-red-700 mt-2">{deleteError}</p>}
+                  </div>
+                )}
 
                 </div>
                 )}
