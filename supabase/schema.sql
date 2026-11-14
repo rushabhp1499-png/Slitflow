@@ -1244,26 +1244,6 @@ drop trigger if exists staff_emails_after on public.staff_emails;
 create trigger staff_emails_after after insert or update or delete on public.staff_emails
 for each row execute function public.staff_emails_after();
 
--- =====================================================================
--- 11. ProMask (SLT-01) figures read from the QMS records Excel
---     The Excel (PE-F-14 customer POs, PE-F-16 Job Card, PE-F-35 lots)
---     stays the place where these are typed; the portal imports the
---     latest copy here. Factory logins only. Safe to run again.
--- =====================================================================
-
-create table if not exists public.promask_import (
-  id text primary key,
-  data jsonb not null,
-  imported_at timestamptz not null default now(),
-  imported_by text
-);
-alter table public.promask_import enable row level security;
-drop policy if exists promask_import_staff_all on public.promask_import;
-create policy promask_import_staff_all on public.promask_import for all to authenticated
-  using (public.is_staff()) with check (public.is_staff());
-revoke all on public.promask_import from anon;
-grant select, insert, update, delete on public.promask_import to authenticated;
-
 -- The three factory logins. Change the emails / names, then run.
 -- (Each person also needs a user in Authentication -> Users.)
 -- insert into public.staff_emails (email, staff_role, display_name) values
