@@ -202,7 +202,7 @@ export const LoginPage: React.FC = () => {
             style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
             className="text-2xl sm:text-3xl font-normal text-slate-900 tracking-normal"
           >
-            Progressive Enterprises
+            Progressive Enterprises Global
           </h1>
           <p className="text-xs uppercase font-medium tracking-wider text-blue-700 mt-1">
             Precision Slitting Works & Live Dispatch Portal
