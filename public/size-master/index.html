@@ -1,6 +1,22 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
+  <script>
+    // Customers and staff only: open the planner only when someone is logged in to the portal.
+    (function () {
+      var ok = false;
+      try {
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (/^sb-.*-auth-token$/.test(k)) {
+            var s = JSON.parse(localStorage.getItem(k) || 'null');
+            if (s && (s.refresh_token || (s.currentSession && s.currentSession.refresh_token))) { ok = true; break; }
+          }
+        }
+      } catch (e) {}
+      if (!ok) { location.replace('/?login=planner'); }
+    })();
+  </script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SlitSmart | Progressive Enterprises</title>
@@ -8,7 +24,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
   <!-- Bump ?v= on every release so browsers fetch the new files instead of a cached copy -->
-  <link rel="stylesheet" href="styles.css?v=2026-10-24-3">
+  <link rel="stylesheet" href="styles.css?v=2026-11-20-1">
 </head>
 <body>
 
@@ -67,7 +83,7 @@
       <div class="kpi-card kpi-purple">
         <div class="kpi-label">Web Length</div>
         <div class="kpi-value" id="kpiLinearMeters">-- m</div>
-        <div class="kpi-subtext">Linear running meters</div>
+        <div class="kpi-subtext" id="kpiLinearSub">Linear running meters</div>
       </div>
 
       <div class="kpi-card kpi-orange">
@@ -312,6 +328,9 @@
           Sizes or roll specs changed. Press <strong>⚡ Calculate</strong> (or Enter) to update these results.
         </div>
 
+        <!-- Shown when the order needs only part of the jumbo -->
+        <div class="partial-run-note" id="partialRunNote" style="display:none;"></div>
+
         <!-- Interactive Visual Roll Cross-Section (main operator view, always fits the width) -->
         <div class="card">
           <div class="card-header">
@@ -414,7 +433,6 @@
   </div>
 
   <!-- Core JavaScript -->
-  <script src="app.js?v=2026-10-24-3"></script>
+  <script src="app.js?v=2026-11-20-1"></script>
 </body>
 </html>
-

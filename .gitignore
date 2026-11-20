@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Publishable Supabase URL and key for the production build (public by design; no secrets)
+!.env.production

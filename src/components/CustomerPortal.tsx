@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useProduction } from '../context/ProductionContext';
 import { MaterialInward, ProductionStatus, DeliveryChallan } from '../types';
 import { StatusBadge } from './StatusBadge';
+import { SIZE_MASTER_URL } from '../utils/sizeMaster';
 import {
   Building2,
   Calendar,
@@ -221,6 +222,17 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
               {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5 text-blue-600" />}
               <span>{copiedLink ? 'Link Copied!' : 'Share Live Tracking Link'}</span>
             </button>
+
+            <a
+              href={SIZE_MASTER_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition"
+              title="Plan your slit widths before you send material"
+            >
+              <Scissors className="w-3.5 h-3.5 text-blue-600" />
+              <span>Size Planner</span>
+            </a>
 
             <button
               type="button"
