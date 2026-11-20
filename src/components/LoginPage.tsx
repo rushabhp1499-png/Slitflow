@@ -270,41 +270,13 @@ export const LoginPage: React.FC = () => {
             {activePortalTab === 'customer' && (
               <div className="space-y-6">
                 
-                {/* Customer Sub Tabs: Client Sign In vs Create New Account */}
-                <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-200">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCustomerSubTab('login');
-                      setClientError('');
-                      setClientSuccess('');
-                    }}
-                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${
-                      customerSubTab === 'login'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    Client Sign In
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCustomerSubTab('register');
-                      setRegError('');
-                      setRegSuccess('');
-                    }}
-                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
-                      customerSubTab === 'register'
-                        ? 'bg-emerald-600 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <PlusCircle className="w-3.5 h-3.5" />
-                    <span>Create New Account</span>
-                  </button>
-                </div>
+                {/* Logins are created by our team only (invite-only). New customers request access on the website. */}
+                <p className="text-[11px] text-slate-500 text-center">
+                  Logins are created by our team for existing customers. Not a customer yet?{' '}
+                  <a href="https://peglobal.in/contact" className="font-bold text-blue-700 hover:underline">
+                    Request access
+                  </a>
+                </p>
 
                 {/* Sub-view A: Customer Sign In (Email + Password or Google) */}
                 {customerSubTab === 'login' && (
