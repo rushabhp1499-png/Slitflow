@@ -35,7 +35,7 @@ export const Logo: React.FC<LogoProps> = ({
               lightText ? 'text-slate-400' : 'text-slate-500'
             }`}
           >
-            Customer &amp; Factory Portal
+            Customer and Factory Portal
           </span>
         </div>
       )}
