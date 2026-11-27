@@ -6,6 +6,7 @@ import { companyContactLine } from '../config/company';
 import { downloadChallanPdf, printChallanPdf } from '../utils/challanExport';
 import { ChallanPreview } from './ChallanPreview';
 import { tracksWeight } from '../utils/floorPlan';
+import { gradeText } from '../utils/material';
 import { WhatsAppDispatchModal } from './WhatsAppDispatchModal';
 import { EmailDispatchModal } from './EmailDispatchModal';
 import {
@@ -359,7 +360,7 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job:
 🗓️ *Date:* ${activeChallan.challanDate}
 🏢 *Customer:* ${custName}
 📦 *Customer PO #:* ${job.customerPoNo}
-⚙️ *Material Grade:* ${job.grade} (${job.thickness} ${job.thicknessUnit})
+⚙️ *Material Grade:* ${gradeText(job)}
 ⚖️ *Dispatched Weight:* ${activeChallan.thisDispatchWeightKg.toLocaleString()} kg
 📦 *Total Bundles:* ${activeChallan.totalBundles} bundles
 🚛 *Vehicle Number:* ${activeChallan.vehicleNo || 'N/A'}
@@ -389,7 +390,7 @@ DELIVERY CHALLAN DETAILS
 • Challan Date: ${activeChallan.challanDate}
 • Customer PO Number: ${job.customerPoNo}
 • Inward Challan Ref: ${job.inwardChallanNo}
-• Material Grade: ${job.grade} (${job.thickness} ${job.thicknessUnit})
+• Material Grade: ${gradeText(job)}
 • Dispatched Weight: ${activeChallan.thisDispatchWeightKg.toLocaleString()} kg
 • Total Bundles: ${activeChallan.totalBundles} bundles
 • Vehicle Number: ${activeChallan.vehicleNo || 'N/A'}
@@ -466,7 +467,7 @@ ${companyContactLine()}`;
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Customer: <strong className="text-white">{job.customerName}</strong> • {job.grade} ({job.thickness}{job.thicknessUnit})
+                Customer: <strong className="text-white">{job.customerName}</strong> • {gradeText(job)}
               </p>
             </div>
           </div>

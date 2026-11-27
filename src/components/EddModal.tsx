@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MaterialInward } from '../types';
 import { useProduction } from '../context/ProductionContext';
+import { sizeText } from '../utils/material';
 import { Calendar, Clock, X, Bell, History } from 'lucide-react';
 
 interface EddModalProps {
@@ -75,7 +76,8 @@ export const EddModal: React.FC<EddModalProps> = ({ job, onClose }) => {
             <div className="flex justify-between">
               <span className="text-slate-500">Incoming Specs:</span>
               <span className="font-medium text-slate-700">
-                {job.thickness} {job.thicknessUnit} × {job.incomingWidth}mm • {job.incomingWeight.toLocaleString()} kg
+                {sizeText(job)}
+                {job.incomingWeight > 0 ? ` • ${job.incomingWeight.toLocaleString()} kg` : ''}
               </span>
             </div>
             <div className="flex justify-between">

@@ -27,6 +27,7 @@ import {
 import { supabase, getSupabase, errorMessage } from '../lib/supabase';
 import { TableSync, SyncedRow } from '../lib/tableSync';
 import { isMachineLocked, machineQueue, planOrder } from '../utils/floorPlan';
+import { thicknessText } from '../utils/material';
 
 type AuthResult = { success: boolean; message: string };
 
@@ -44,6 +45,7 @@ export type AdminOrderChanges = Partial<
     | 'thickness'
     | 'thicknessUnit'
     | 'incomingWidth'
+    | 'lotDetails'
     | 'incomingLength'
     | 'incomingWeight'
     | 'coilsOrRollsCount'
@@ -180,6 +182,7 @@ interface ProductionContextType {
     thickness: number;
     thicknessUnit: MaterialInward['thicknessUnit'];
     incomingWidth: number;
+    lotDetails?: string;
     incomingLength: number;
     incomingWeight: number;
     coilsOrRollsCount: number;
@@ -1203,11 +1206,12 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       receivedDate: data.receivedDate || new Date().toISOString().split('T')[0],
       materialType: data.materialType,
       grade: data.grade,
-      thickness: Number(data.thickness),
+      thickness: Number(data.thickness) || 0,
       thicknessUnit: data.thicknessUnit,
-      incomingWidth: Number(data.incomingWidth),
-      incomingLength: Number(data.incomingLength),
-      incomingWeight: Number(data.incomingWeight),
+      incomingWidth: Number(data.incomingWidth) || 0,
+      ...(data.lotDetails ? { lotDetails: data.lotDetails } : {}),
+      incomingLength: Number(data.incomingLength) || 0,
+      incomingWeight: Number(data.incomingWeight) || 0,
       coilsOrRollsCount: Number(data.coilsOrRollsCount) || 1,
       bundleSpecs: data.bundleSpecs,
       customerInstructions: data.customerInstructions || 'Standard precision slitting and bundle packaging.',
@@ -1386,7 +1390,11 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
     const slitSummary = job.outputDetails?.slitCuts
       ? job.outputDetails.slitCuts.map(c => `${c.widthMm}mm (${c.numberOfCuts} cuts)`).join(', ')
-      : `${job.incomingWidth}mm standard cut`;
+      : job.requestedSlitSizes?.length
+      ? job.requestedSlitSizes.map(s => `${s.widthMm}mm`).join(', ')
+      : job.incomingWidth > 0
+      ? `${job.incomingWidth}mm standard cut`
+      : 'As per order';
 
     // A challan lists only weighed bundles that are not on any other active challan.
     const allJobBundles = job.bundles || [];
@@ -1477,7 +1485,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 srNo: 1,
                 description: `Slitted & packed ${job.grade}`,
                 grade: job.grade,
-                thickness: `${job.thickness} ${job.thicknessUnit}`,
+                thickness: thicknessText(job),
                 slitWidthsSummary: slitSummary,
                 incomingWeightKg: job.incomingWeight,
                 dispatchedWeightKg: totalNetWeight,
@@ -1496,8 +1504,8 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                 srNo: bundles > 0 ? 2 : 1,
                 description: `Unslit ${job.grade} returned (balance material)`,
                 grade: job.grade,
-                thickness: `${job.thickness} ${job.thicknessUnit}`,
-                slitWidthsSummary: `${job.incomingWidth} mm (not slit)`,
+                thickness: thicknessText(job),
+                slitWidthsSummary: job.incomingWidth > 0 ? `${job.incomingWidth} mm (not slit)` : 'Not slit',
                 incomingWeightKg: job.incomingWeight,
                 dispatchedWeightKg: returned.weightKg,
                 scrapWeightKg: 0,

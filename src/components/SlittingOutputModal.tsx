@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { MaterialInward, SlitCut, SlittingOutput } from '../types';
 import { useProduction } from '../context/ProductionContext';
+import { sizeText } from '../utils/material';
 import { Scissors, Plus, Trash2, X, Package, ShieldCheck, Scale } from 'lucide-react';
 
 interface SlittingOutputModalProps {
@@ -15,7 +16,7 @@ export const SlittingOutputModal: React.FC<SlittingOutputModalProps> = ({ job, o
   const defaultCuts: SlitCut[] = job.outputDetails?.slitCuts || [
     {
       id: 'cut-1',
-      widthMm: Math.round(job.incomingWidth / 4),
+      widthMm: job.requestedSlitSizes?.[0]?.widthMm || Math.round(job.incomingWidth / 4) || 0,
       numberOfCuts: 4,
       remarks: 'Primary precision slit width',
     },
@@ -148,7 +149,7 @@ export const SlittingOutputModal: React.FC<SlittingOutputModalProps> = ({ job, o
             <div>
               <span className="text-slate-500 block">Incoming Size</span>
               <span className="font-bold text-slate-800">
-                {job.thickness}{job.thicknessUnit} × {job.incomingWidth}mm
+                {sizeText(job)}
               </span>
             </div>
             <div>
@@ -171,7 +172,8 @@ export const SlittingOutputModal: React.FC<SlittingOutputModalProps> = ({ job, o
                   Finished Slit Sizes (Width & Cuts)
                 </label>
                 <span className="text-xs text-slate-500 ml-2">
-                  (Total slit span: {totalSlitWidthCalculated}mm / Parent: {job.incomingWidth}mm)
+                  (Total slit span: {totalSlitWidthCalculated}mm
+                  {job.incomingWidth > 0 ? ` / Parent: ${job.incomingWidth}mm` : ''})
                 </span>
               </div>
               <button

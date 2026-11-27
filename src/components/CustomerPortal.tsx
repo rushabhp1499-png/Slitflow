@@ -4,6 +4,7 @@ import { MaterialInward, ProductionStatus, DeliveryChallan } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { SIZE_MASTER_URL } from '../utils/sizeMaster';
 import { tracksWeight } from '../utils/floorPlan';
+import { sizeText, thicknessText } from '../utils/material';
 import {
   Building2,
   Calendar,
@@ -360,7 +361,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
 
                     <div className="text-xs text-slate-600 mt-2 flex justify-between">
                       <span>
-                        {job.thickness}{job.thicknessUnit} × {job.incomingWidth}mm
+                        {sizeText(job)}
                       </span>
                       <span className="font-bold text-slate-900">
                         {weightText(job)}
@@ -628,16 +629,26 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                     <div className="flex justify-between py-1 border-b border-slate-100">
                       <span className="text-slate-500">Thickness:</span>
                       <span className="font-bold text-slate-900">
-                        {activeJob.thickness} {activeJob.thicknessUnit}
+                        {thicknessText(activeJob) || 'Not given'}
                       </span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-100">
                       <span className="text-slate-500">Incoming Width:</span>
-                      <span className="font-bold text-slate-900">{activeJob.incomingWidth} mm</span>
+                      <span className="font-bold text-slate-900">
+                        {activeJob.incomingWidth > 0 ? `${activeJob.incomingWidth} mm` : 'Not given'}
+                      </span>
                     </div>
+                    {activeJob.lotDetails && (
+                      <div className="flex justify-between gap-3 py-1 border-b border-slate-100">
+                        <span className="text-slate-500 shrink-0">Lot details:</span>
+                        <span className="font-bold text-slate-900 text-right">{activeJob.lotDetails}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between py-1 border-b border-slate-100">
                       <span className="text-slate-500">Length:</span>
-                      <span className="font-bold text-slate-900">{activeJob.incomingLength} meters</span>
+                      <span className="font-bold text-slate-900">
+                        {activeJob.incomingLength > 0 ? `${activeJob.incomingLength} meters` : 'Not given'}
+                      </span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-100">
                       <span className="text-slate-500">Gross Incoming Weight:</span>

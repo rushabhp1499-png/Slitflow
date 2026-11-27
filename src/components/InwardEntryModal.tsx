@@ -77,6 +77,7 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
   const [incomingWidth, setIncomingWidth] = useState<string>('');
   const [incomingLength, setIncomingLength] = useState<string>('');
   const [incomingWeight, setIncomingWeight] = useState<string>('');
+  const [lotDetails, setLotDetails] = useState<string>('');
   const [coilsOrRollsCount, setCoilsOrRollsCount] = useState<string>('1');
 
   // Slitting sizes requested by the customer
@@ -145,9 +146,10 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
       receivedDate,
       materialType: 'Other',
       grade: grade.trim(),
-      thickness: Number(thickness),
+      thickness: Number(thickness) || 0,
       thicknessUnit,
       incomingWidth: widthNum,
+      lotDetails: lotDetails.trim(),
       incomingLength: Number(incomingLength) || 0,
       incomingWeight: weightNum,
       coilsOrRollsCount: Number(coilsOrRollsCount) || 1,
@@ -293,14 +295,14 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Thickness <span className="text-red-500">*</span>
+                  Thickness
                 </label>
                 <div className="flex">
                   <input
                     type="number"
                     step="any"
-                    required
-                    min={0.001}
+                    min={0}
+                    placeholder="If known"
                     value={thickness}
                     onChange={(e) => setThickness(e.target.value)}
                     className="w-full min-w-0 px-2.5 py-2 bg-slate-50 border border-r-0 border-slate-300 rounded-l-lg text-xs font-bold text-slate-800"
@@ -319,13 +321,13 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Width (mm) <span className="text-red-500">*</span>
+                  Width (mm)
                 </label>
                 <input
                   type="number"
                   step="any"
-                  required
-                  min={1}
+                  min={0}
+                  placeholder="If known"
                   value={incomingWidth}
                   onChange={(e) => setIncomingWidth(e.target.value)}
                   className={`${inputClass} font-bold`}
@@ -378,6 +380,19 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
                   className={inputClass}
                 />
               </div>
+            </div>
+
+            <div className="mt-3">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Lot details <span className="font-normal text-slate-400">(when sizes are mixed)</span>
+              </label>
+              <input
+                type="text"
+                value={lotDetails}
+                onChange={(e) => setLotDetails(e.target.value)}
+                placeholder="e.g. 40 ft container, widths 500-1300 mm, 23-50 micron, about 18 rolls"
+                className={inputClass}
+              />
             </div>
           </div>
 

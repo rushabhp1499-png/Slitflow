@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MaterialInward, DeliveryChallan, Customer } from '../types';
+import { gradeText } from '../utils/material';
 import { X, Copy, Check, MessageSquare, ExternalLink, Smartphone, Globe, ShieldCheck } from 'lucide-react';
 
 interface WhatsAppDispatchModalProps {
@@ -49,7 +50,7 @@ export const WhatsAppDispatchModal: React.FC<WhatsAppDispatchModalProps> = ({
 🗓️ *Date:* ${activeChallan.challanDate}
 🏢 *Customer:* ${custName}
 📦 *Customer PO #:* ${job.customerPoNo}
-⚙️ *Material Grade:* ${job.grade} (${job.thickness} ${job.thicknessUnit})
+⚙️ *Material Grade:* ${gradeText(job)}
 ⚖️ *Dispatched Net Weight:* ${activeChallan.thisDispatchWeightKg.toLocaleString()} kg
 📦 *Total Bundles:* ${activeChallan.totalBundles} bundles
 🚛 *Vehicle / Lorry No:* ${activeChallan.vehicleNo || 'N/A'}
@@ -66,7 +67,7 @@ _Official Dispatch Email: progressive.ent8@gmail.com_`;
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 🏢 *Customer:* ${custName}
 📦 *Customer PO #:* ${job.customerPoNo}
-⚙️ *Material Grade:* ${job.grade} (${job.thickness} ${job.thicknessUnit})
+⚙️ *Material Grade:* ${gradeText(job)}
 ⚖️ *Incoming Material Weight:* ${job.incomingWeight.toLocaleString()} kg
 🔄 *Current Status:* ${job.status.replace('-', ' ').toUpperCase()}
 ${job.bundles ? `📦 *Completed Bundles:* ${job.bundles.filter(b => b.status === 'ready').length} bundles` : ''}

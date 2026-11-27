@@ -1,5 +1,6 @@
 import { DeliveryChallan, MaterialInward, Customer } from '../types';
 import { COMPANY, companyContactLine } from '../config/company';
+import { gradeText } from '../utils/material';
 
 export interface SendEmailParams {
   accessToken: string;
@@ -162,7 +163,7 @@ DELIVERY CHALLAN DISPATCH DETAILS
 • Challan Date: ${challan.challanDate}
 • Customer PO Ref: ${job.customerPoNo}
 • Inward Material Ref: Challan #${job.inwardChallanNo}
-• Material Grade & Size: ${job.grade} (${job.thickness} ${job.thicknessUnit})
+• Material Grade & Size: ${gradeText(job)}
 • Dispatched Net Weight: ${dispatchWeight} kg
 • Total Bundles Dispatched: ${challan.totalBundles} bundles
 • Vehicle / Lorry No: ${vehicle}
@@ -240,7 +241,7 @@ Progressive Enterprises Precision Slitting Works`;
                 </tr>
                 <tr style="border-bottom: 1px solid #e2e8f0;">
                   <td style="color: #64748b; font-weight: 600;">Material Grade & Gauge:</td>
-                  <td style="font-weight: 600;">${job.grade} (${job.thickness} ${job.thicknessUnit})</td>
+                  <td style="font-weight: 600;">${gradeText(job)}</td>
                 </tr>
                 <tr style="border-bottom: 1px solid #e2e8f0;">
                   <td style="color: #64748b; font-weight: 600;">Dispatched Net Weight:</td>

@@ -321,7 +321,8 @@ export interface MaterialInward {
   grade: string; // e.g. 12 Micron Polyester Film, SS 304, CRCA, Aluminum 1050
   thickness: number;
   thicknessUnit: 'mm' | 'microns' | 'gauge';
-  incomingWidth: number; // in mm (e.g. 1000 mm)
+  incomingWidth: number; // in mm (e.g. 1000 mm); 0 = not given (mixed lot)
+  lotDetails?: string; // free text for mixed lots, e.g. "40 ft container, widths 500-1300 mm, 23-50 micron"
   incomingLength: number; // in meters
   incomingWeight: number; // in kg (e.g. 1252 kg)
   coilsOrRollsCount: number; // number of incoming coils/reels

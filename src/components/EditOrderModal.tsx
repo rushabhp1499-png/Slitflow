@@ -43,6 +43,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ job, onClose }) 
     thickness: String(job.thickness ?? ''),
     thicknessUnit: job.thicknessUnit,
     incomingWidth: String(job.incomingWidth ?? ''),
+    lotDetails: job.lotDetails || '',
     incomingLength: String(job.incomingLength ?? ''),
     incomingWeight: String(job.incomingWeight ?? ''),
     coilsOrRollsCount: String(job.coilsOrRollsCount ?? ''),
@@ -75,6 +76,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ job, onClose }) 
       thickness: num(form.thickness),
       thicknessUnit: form.thicknessUnit,
       incomingWidth: num(form.incomingWidth),
+      lotDetails: form.lotDetails.trim(),
       incomingLength: num(form.incomingLength),
       incomingWeight: num(form.incomingWeight),
       coilsOrRollsCount: num(form.coilsOrRollsCount),
@@ -84,7 +86,7 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ job, onClose }) 
     // Send only what actually changed.
     const changes: AdminOrderChanges = {};
     (Object.keys(next) as (keyof AdminOrderChanges)[]).forEach(k => {
-      if (next[k] !== job[k]) (changes as Record<string, unknown>)[k] = next[k];
+      if ((next[k] ?? '') !== (job[k] ?? '')) (changes as Record<string, unknown>)[k] = next[k];
     });
     if (Object.keys(changes).length === 0) return setError('Nothing has changed.');
 
@@ -215,6 +217,11 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ job, onClose }) 
               <label className={label}>Rolls / coils</label>
               <input type="number" value={form.coilsOrRollsCount} onChange={set('coilsOrRollsCount')} className={input} />
             </div>
+          </div>
+
+          <div>
+            <label className={label}>Lot details (mixed sizes)</label>
+            <input value={form.lotDetails} onChange={set('lotDetails')} className={input} />
           </div>
 
           <div>

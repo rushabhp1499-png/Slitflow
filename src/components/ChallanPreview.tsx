@@ -3,6 +3,7 @@ import { DeliveryChallan, MaterialInward } from '../types';
 import { COMPANY, companyContactLine } from '../config/company';
 import { challanBundles, sizeSummary } from '../utils/challanExport';
 import { formatKg } from '../utils/weight';
+import { gradeText } from '../utils/material';
 
 const orDash = (v?: string | null) => (v && v.trim() && v.trim() !== '—' ? v.trim() : '—');
 
@@ -69,7 +70,7 @@ export const ChallanPreview: React.FC<{ challan: DeliveryChallan; job: MaterialI
             <tr key={s.label}>
               <td className="py-1.5 px-2">{i + 1}</td>
               <td className="py-1.5 px-2">
-                Slitted {job.grade}, {job.thickness} {job.thicknessUnit} – {s.label}
+                Slitted {gradeText(job)} – {s.label}
               </td>
               <td className="py-1.5 px-2 text-right font-mono">{s.bundles}</td>
               <td className="py-1.5 px-2 text-right font-mono">{s.rolls || '—'}</td>

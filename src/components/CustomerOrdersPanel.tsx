@@ -4,6 +4,7 @@ import { Customer, MaterialInward } from '../types';
 import { formatKg } from '../utils/weight';
 import { STATUS_LABEL, exportJobsToExcel } from '../utils/excelExport';
 import { isOpenOrder, tracksWeight } from '../utils/floorPlan';
+import { sizeText } from '../utils/material';
 import { ChevronDown, ChevronRight, FileSpreadsheet } from 'lucide-react';
 
 const isClosed = (j: MaterialInward) => j.poStatus === 'closed' || j.status === 'po_closed';
@@ -129,7 +130,7 @@ export const CustomerOrdersPanel: React.FC<{ customer: Customer }> = ({ customer
                       <td className="px-2 py-1.5 hidden lg:table-cell text-slate-700">
                         <div className="truncate max-w-[160px]">{j.grade}</div>
                         <div className="text-[10px] text-slate-400">
-                          {j.thickness} {j.thicknessUnit} × {j.incomingWidth} mm
+                          {sizeText(j)}
                         </div>
                       </td>
                       <td className="px-2 py-1.5 text-right font-mono">{tracksWeight(j) ? formatKg(j.incomingWeight) : '—'}</td>

@@ -3,6 +3,7 @@ import { useProduction } from '../context/ProductionContext';
 import { MaterialInward } from '../types';
 import { formatKg } from '../utils/weight';
 import { isMachineLocked, isOpenOrder, machineQueue, orderTargetKg, packedKg, pendingKg } from '../utils/floorPlan';
+import { gradeText, sizeText } from '../utils/material';
 import { Maximize, ArrowLeft, PanelLeftClose, PanelLeftOpen, Search, X, GripVertical, Lock } from 'lucide-react';
 
 // Live Floor and planner. Left: open POs not yet on a machine. Right: one tile per machine with the
@@ -276,7 +277,7 @@ export const LiveFloor: React.FC = () => {
                         </div>
                         <div className="text-xs font-semibold truncate">{j.customerName}</div>
                         <div className="text-[11px] text-slate-400 truncate">
-                          {j.grade} • {j.thickness} {j.thicknessUnit} × {j.incomingWidth} mm
+                          {j.grade} • {sizeText(j)}
                         </div>
                         <div className="flex items-center justify-between gap-2 text-[11px] mt-0.5">
                           <span className="text-slate-400 truncate">
@@ -364,7 +365,7 @@ export const LiveFloor: React.FC = () => {
                         </div>
                         <div className="text-base font-bold truncate">{job.customerName}</div>
                         <div className="text-xs text-slate-400 truncate">
-                          {job.grade} • {job.thickness} {job.thicknessUnit}
+                          {gradeText(job)}
                           {job.requestedSlitSizes?.length ? ` • ${job.requestedSlitSizes.map((s) => `${s.widthMm} mm`).join(', ')}` : ''}
                         </div>
                       </div>

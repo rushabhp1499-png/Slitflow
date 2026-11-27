@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import autoTableImport from 'jspdf-autotable';
 import { BundleRecord, DeliveryChallan, MaterialInward } from '../types';
 import { COMPANY, companyContactLine } from '../config/company';
+import { gradeText } from './material';
 
 // The plugin's default export is wrapped one level deeper when loaded as CommonJS.
 const autoTable = ((autoTableImport as unknown as { default?: typeof autoTableImport }).default ??
@@ -111,7 +112,7 @@ export function buildChallanPdf(challan: DeliveryChallan, job: MaterialInward): 
   // Goods: one line per slit size, plus the returned unslit material
   const goodsRows: string[][] = sizeSummary(bundles).map((s, i) => [
     String(i + 1),
-    `Slitted ${job.grade}, ${job.thickness} ${job.thicknessUnit} – ${s.label}`,
+    `Slitted ${gradeText(job)} – ${s.label}`,
     String(s.bundles),
     s.rolls ? String(s.rolls) : '—',
     kg(s.netKg),

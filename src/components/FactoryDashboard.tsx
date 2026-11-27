@@ -38,6 +38,7 @@ import {
   KeyRound
 } from 'lucide-react';
 import { EditOrderModal } from './EditOrderModal';
+import { sizeText } from '../utils/material';
 import { UsersModal } from './UsersModal';
 
 interface FactoryDashboardProps {
@@ -886,7 +887,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                         <td className="py-3.5 px-4 align-top">
                           <div className="font-semibold text-slate-900">{job.grade}</div>
                           <div className="text-xs text-slate-600 mt-0.5">
-                            {job.thickness} {job.thicknessUnit} × {job.incomingWidth} mm
+                            {sizeText(job)}
                           </div>
                           <div className="text-xs font-bold text-blue-900 mt-0.5">
                             {tracksWeight(job) ? `${job.incomingWeight.toLocaleString()} kg` : 'Weight not given'}{' '}
