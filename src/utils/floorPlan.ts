@@ -1,8 +1,15 @@
 import { MaterialInward } from '../types';
 
+// Incoming weight is optional (e.g. mixed container lots): with none entered there is no balance to tally.
+export const tracksWeight = (j: MaterialInward) => (j.incomingWeight || 0) > 0;
+
+// Material still to slit or send: by weight when it was entered, otherwise until the PO is dispatched or closed.
+export const hasMaterialLeft = (j: MaterialInward) =>
+  !tracksWeight(j) || (j.remainingWeightKg ?? j.incomingWeight) > 0;
+
 // Still has material to slit or send: shown on the floor planner.
 export const isOpenOrder = (j: MaterialInward) =>
-  j.status !== 'po_closed' && j.poStatus !== 'closed' && j.status !== 'dispatched' && (j.remainingWeightKg ?? j.incomingWeight) > 0;
+  j.status !== 'po_closed' && j.poStatus !== 'closed' && j.status !== 'dispatched' && hasMaterialLeft(j);
 
 // Once slitting has started on a machine, the order stays on it (the database enforces this too).
 export const isMachineLocked = (j: MaterialInward) =>

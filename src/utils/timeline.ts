@@ -1,5 +1,6 @@
 import { MaterialInward } from '../types';
 import { formatKg } from './weight';
+import { hasMaterialLeft } from './floorPlan';
 
 export interface TimelineEvent {
   at: string; // ISO date or date-time
@@ -90,7 +91,7 @@ export const nextStep = (job: MaterialInward): string | null => {
     return 'Factory is reviewing your change request';
   }
   if (!job.estimatedDeliveryDate) return 'Factory will confirm the delivery date';
-  if ((job.remainingWeightKg ?? job.incomingWeight) <= 0 || job.status === 'dispatched') return 'All material dispatched';
+  if (!hasMaterialLeft(job) || job.status === 'dispatched') return 'All material dispatched';
   if ((job.bundles || []).some((b) => b.status === 'ready' && !b.isVoided)) return 'Packed bundles waiting for dispatch';
   if (job.status === 'received' || job.status === 'pending_production') return 'Waiting for its turn on the slitting machine';
   return 'Slitting and packing in progress';

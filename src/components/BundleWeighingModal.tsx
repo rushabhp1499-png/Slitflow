@@ -36,10 +36,11 @@ const loadPrefs = (): BundlePrefs => {
 };
 
 export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({ job, onClose, onOpenChallan }) => {
-  const { jobs, addBundleToJob, deleteBundleFromJob } = useProduction();
+  const { jobs, customers, addBundleToJob, deleteBundleFromJob, setBundleLifted } = useProduction();
 
   // Always read the live job so the list updates immediately
   const currentJob = jobs.find((j) => j.id === job.id) || job;
+  const keepsStock = !!customers.find((c) => c.id === currentJob.customerId)?.keepsStock;
   const bundles = currentJob.bundles || [];
   const nextBundleNumber = bundles.reduce((max, b) => Math.max(max, b.bundleNumber || 0), 0) + 1;
   const nextBundleTag = `BNDL-${String(nextBundleNumber).padStart(2, '0')}`;
@@ -365,11 +366,28 @@ export const BundleWeighingModal: React.FC<BundleWeighingModalProps> = ({ job, o
                               b.status === 'dispatched' ? 'bg-slate-100 text-slate-600' : 'bg-emerald-50 text-emerald-700'
                             }`}
                           >
-                            {b.status === 'dispatched' ? 'Dispatched' : 'Ready'}
+                            {b.status !== 'dispatched' ? 'Ready' : keepsStock ? 'Billed' : 'Dispatched'}
                           </span>
                         </td>
                         <td className="py-2 px-3">
                           <div className="flex items-center justify-end gap-1">
+                            {/* Keeps-stock customers: billed rolls may stay with us; marking them lifted is optional */}
+                            {keepsStock && b.status === 'dispatched' && (
+                              <button
+                                type="button"
+                                onClick={() => setBundleLifted(currentJob.id, b.id, !b.liftedAt)}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                  b.liftedAt
+                                    ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                    : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                                }`}
+                                title={b.liftedAt ? 'Click to undo' : 'Mark that the customer has collected this bundle'}
+                              >
+                                {b.liftedAt
+                                  ? `Lifted ${new Date(b.liftedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}`
+                                  : 'Mark lifted'}
+                              </button>
+                            )}
                             {b.status !== 'dispatched' && (
                               <button
                                 type="button"

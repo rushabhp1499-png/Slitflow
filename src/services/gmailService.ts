@@ -141,6 +141,8 @@ export function buildChallanEmailTemplates(
   const custName = customer?.companyName || job.customerName;
   const dispatchWeight = challan.thisDispatchWeightKg.toLocaleString();
   const balanceWeight = challan.remainingBalanceWeightKg.toLocaleString();
+  // No balance line when the incoming weight was not given or the customer keeps its stock with us.
+  const showBalance = challan.totalOrderWeightKg > 0 && !challan.billedOnly;
   const vehicle = challan.vehicleNo || 'Self / Direct Pickup';
   const transporter = challan.transporterName || 'Direct Delivery';
   const url = trackingUrl || window.location.origin;
@@ -165,8 +167,7 @@ DELIVERY CHALLAN DISPATCH DETAILS
 • Total Bundles Dispatched: ${challan.totalBundles} bundles
 • Vehicle / Lorry No: ${vehicle}
 • Transporter Name: ${transporter}
-• Balance Remaining at Works: ${balanceWeight} kg
-=======================================================
+${showBalance ? `• Balance Remaining at Works: ${balanceWeight} kg\n` : ''}=======================================================
 
 VIEW & PRINT DIGITAL CHALLAN:
 ${url}
@@ -257,10 +258,10 @@ Progressive Enterprises Precision Slitting Works`;
                   <td style="color: #64748b; font-weight: 600;">Transporter Name:</td>
                   <td style="font-weight: 600;">${transporter}</td>
                 </tr>
-                <tr>
+                ${showBalance ? `<tr>
                   <td style="color: #64748b; font-weight: 600;">Balance Pending at Works:</td>
                   <td style="font-weight: 600; color: #475569;">${balanceWeight} kg</td>
-                </tr>
+                </tr>` : ''}
               </table>
             </td>
           </tr>

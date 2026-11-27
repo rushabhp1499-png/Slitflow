@@ -116,11 +116,22 @@ export const ChallanPreview: React.FC<{ challan: DeliveryChallan; job: MaterialI
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-bold">
-        <span>Material received: {formatKg(challan.totalOrderWeightKg)} kg</span>
-        <span>This challan: {formatKg(challan.thisDispatchWeightKg)} kg</span>
-        <span>Balance with us: {formatKg(challan.remainingBalanceWeightKg)} kg</span>
-      </div>
+      {challan.totalOrderWeightKg > 0 && !challan.billedOnly ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-bold">
+          <span>Material received: {formatKg(challan.totalOrderWeightKg)} kg</span>
+          <span>This challan: {formatKg(challan.thisDispatchWeightKg)} kg</span>
+          <span>Balance with us: {formatKg(challan.remainingBalanceWeightKg)} kg</span>
+        </div>
+      ) : (
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-bold">
+          This challan: {formatKg(challan.thisDispatchWeightKg)} kg
+          {challan.billedOnly && (
+            <span className="block font-normal text-slate-600 mt-0.5">
+              Slit material billed on this challan. At the customer's request it may stay stored at our premises until collected.
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row justify-between gap-4 pt-2 text-[11px] text-slate-600">
         <div>

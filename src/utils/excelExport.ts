@@ -57,7 +57,7 @@ export async function exportJobsToExcel(jobs: MaterialInward[], machines: Machin
       'Delivery Date (EDD)': j.estimatedDeliveryDate || '',
       'Bundles Weighed': (j.bundles || []).filter((b) => !b.isVoided).length,
       'Dispatched (kg)': kg(j.dispatchedWeightKg),
-      'Balance (kg)': kg(Math.max(0, j.incomingWeight - (j.dispatchedWeightKg || 0))),
+      'Balance (kg)': j.incomingWeight > 0 ? kg(Math.max(0, j.incomingWeight - (j.dispatchedWeightKg || 0))) : '',
       Challans: activeChallans.map((c) => c.challanNo).join(', '),
       'PO Status': PO_STATUS_LABEL[j.poStatus] || j.poStatus,
       'Closed On': day(j.poClosedAt),
@@ -81,7 +81,7 @@ export async function exportJobsToExcel(jobs: MaterialInward[], machines: Machin
           'Slit Net (kg)': kg(c.slitNetWeightKg ?? c.thisDispatchWeightKg - returned),
           'Returned Unslit (kg)': kg(returned),
           'Total Dispatched (kg)': kg(c.thisDispatchWeightKg),
-          'Balance After (kg)': kg(c.remainingBalanceWeightKg),
+          'Balance After (kg)': c.totalOrderWeightKg > 0 && !c.billedOnly ? kg(c.remainingBalanceWeightKg) : '',
           Type: c.dispatchType === 'final' ? 'Final' : 'Partial',
           Revision: c.revisionLabel,
         };

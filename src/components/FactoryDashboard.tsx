@@ -4,7 +4,7 @@ import { MaterialInward, ProductionStatus } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { SIZE_MASTER_URL, sizeMasterLink } from '../utils/sizeMaster';
 import { exportJobsToExcel } from '../utils/excelExport';
-import { isMachineLocked, machineQueue, orderTargetKg, packedKg } from '../utils/floorPlan';
+import { hasMaterialLeft, isMachineLocked, machineQueue, orderTargetKg, packedKg, tracksWeight } from '../utils/floorPlan';
 import { formatKg } from '../utils/weight';
 import { AnimatedNumber } from './AnimatedNumber';
 import {
@@ -127,13 +127,13 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
     (j.status === 'received' || j.status === 'pending_production') && !isJobClosed(j);
 
   const isJobUnderSlitting = (j: MaterialInward) =>
-    (j.status === 'in_production' || (j.status === 'partially_dispatched' && (j.remainingWeightKg || 0) > 0)) && !isJobClosed(j);
+    (j.status === 'in_production' || (j.status === 'partially_dispatched' && hasMaterialLeft(j))) && !isJobClosed(j);
 
   const isJobReadyDispatch = (j: MaterialInward) =>
     (j.status === 'slitting_completed' ||
      j.status === 'ready_for_dispatch' ||
      (j.bundles && j.bundles.some(b => b.status === 'ready')) ||
-     (j.status === 'partially_dispatched' && (j.remainingWeightKg || 0) > 0)) && !isJobClosed(j);
+     (j.status === 'partially_dispatched' && hasMaterialLeft(j))) && !isJobClosed(j);
 
   // "Today" view: what needs attention now. Dates compared in local time.
   const localDay = (d: Date) =>
@@ -141,7 +141,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
   const today = localDay(new Date());
   const tomorrow = localDay(new Date(Date.now() + 24 * 60 * 60 * 1000));
   const hasBalance = (j: MaterialInward) =>
-    !isJobClosed(j) && j.status !== 'dispatched' && (j.remainingWeightKg ?? j.incomingWeight) > 0;
+    !isJobClosed(j) && j.status !== 'dispatched' && hasMaterialLeft(j);
   const todayChecks: Record<string, (j: MaterialInward) => boolean> = {
     TODAY_IN: (j) => !!j.createdAt && localDay(new Date(j.createdAt)) === today,
     OVERDUE: (j) => hasBalance(j) && !!j.estimatedDeliveryDate && j.estimatedDeliveryDate < today,
@@ -889,7 +889,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                             {job.thickness} {job.thicknessUnit} × {job.incomingWidth} mm
                           </div>
                           <div className="text-xs font-bold text-blue-900 mt-0.5">
-                            {job.incomingWeight.toLocaleString()} kg{' '}
+                            {tracksWeight(job) ? `${job.incomingWeight.toLocaleString()} kg` : 'Weight not given'}{' '}
                             <span className="font-normal text-slate-400 text-[10px]">
                               ({job.coilsOrRollsCount} coil{job.coilsOrRollsCount > 1 ? 's' : ''})
                             </span>
@@ -950,11 +950,13 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                           {dispatchedWeight > 0 && (
                             <div className="mt-1.5 space-y-0.5 text-[11px]">
                               <div className="text-emerald-800 font-bold">
-                                Dispatched: {dispatchedWeight.toLocaleString()} kg
+                                {customer?.keepsStock ? 'Billed' : 'Dispatched'}: {dispatchedWeight.toLocaleString()} kg
                               </div>
-                              <div className="text-slate-500 font-medium">
-                                Balance: <strong className="text-slate-800">{remainingWeight.toLocaleString()} kg</strong>
-                              </div>
+                              {tracksWeight(job) && !customer?.keepsStock && (
+                                <div className="text-slate-500 font-medium">
+                                  Balance: <strong className="text-slate-800">{remainingWeight.toLocaleString()} kg</strong>
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -1340,7 +1342,13 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                                                 : 'bg-emerald-100 text-emerald-800'
                                             }`}
                                           >
-                                            {b.status === 'dispatched' ? 'Dispatched' : 'Ready'}
+                                            {b.status !== 'dispatched'
+                                              ? 'Ready'
+                                              : !customer?.keepsStock
+                                              ? 'Dispatched'
+                                              : b.liftedAt
+                                              ? 'Billed • Lifted'
+                                              : 'Billed'}
                                           </span>
                                         </div>
                                       </div>

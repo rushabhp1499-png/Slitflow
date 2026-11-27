@@ -5,6 +5,7 @@ import { COMPANY_INFO } from '../data/mockData';
 import { companyContactLine } from '../config/company';
 import { downloadChallanPdf, printChallanPdf } from '../utils/challanExport';
 import { ChallanPreview } from './ChallanPreview';
+import { tracksWeight } from '../utils/floorPlan';
 import { WhatsAppDispatchModal } from './WhatsAppDispatchModal';
 import { EmailDispatchModal } from './EmailDispatchModal';
 import {
@@ -112,9 +113,13 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job:
   const [emailSubject, setEmailSubject] = useState<string>('');
   const [emailCopied, setEmailCopied] = useState(false);
 
-  // Remaining balance
+  // Remaining balance (only when the incoming weight was entered)
+  const tracked = tracksWeight(job);
+  // Keeps-stock customers (e.g. Dyna): a challan bills what was slit; the rolls may stay with us.
+  const keepsStock = !!customer?.keepsStock;
   const dispatchedSoFar = job.dispatchedWeightKg || 0;
   const balanceRemaining = Math.max(0, job.incomingWeight - dispatchedSoFar);
+  const [lastChallan, setLastChallan] = useState(false);
 
   // Bundles weighed and not yet on any challan
   const readyBundles = (job.bundles || []).filter((b) => b.status === 'ready' && !b.isVoided);
@@ -260,12 +265,13 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job:
       setCreateError('Enter the weight of the unslit material being returned.');
       return;
     }
-    if (totalLeaving > balanceRemaining + 0.001) {
+    if (tracked && totalLeaving > balanceRemaining + 0.001) {
       setCreateError(`This challan sends ${totalLeaving.toFixed(2)} kg but only ${balanceRemaining.toFixed(2)} kg of this order is still with you.`);
       return;
     }
 
-    const isPartial = totalLeaving < balanceRemaining;
+    // With no incoming weight there is no balance to compare, so the user says when it is the last challan.
+    const isPartial = tracked ? totalLeaving < balanceRemaining : !lastChallan;
 
     try {
       const created = generateDeliveryChallan(job.id, {
@@ -388,8 +394,7 @@ DELIVERY CHALLAN DETAILS
 • Total Bundles: ${activeChallan.totalBundles} bundles
 • Vehicle Number: ${activeChallan.vehicleNo || 'N/A'}
 • Transporter Name: ${activeChallan.transporterName || 'Direct'}
-• Balance Remaining in Factory: ${activeChallan.remainingBalanceWeightKg.toLocaleString()} kg
-==================================================
+${tracked && !keepsStock ? `• Balance Remaining in Factory: ${activeChallan.remainingBalanceWeightKg.toLocaleString()} kg\n` : ''}==================================================
 
 You can view, verify, and print your verified Delivery Challan at:
 ${trackingUrl}
@@ -504,7 +509,7 @@ ${companyContactLine()}`;
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>+ New Challan {balanceRemaining > 0 ? `(${balanceRemaining.toLocaleString()} kg bal)` : ''}</span>
+                <span>+ New Challan {tracked && balanceRemaining > 0 ? `(${balanceRemaining.toLocaleString()} kg bal)` : ''}</span>
               </button>
             )}
 
@@ -601,6 +606,17 @@ ${companyContactLine()}`;
               </div>
 
               {/* Balance & Inventory Overview */}
+              {!tracked || keepsStock ? (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-6 text-xs text-slate-700">
+                  <strong className="text-slate-900">
+                    {keepsStock ? 'Billed so far' : 'Dispatched so far'}: {dispatchedSoFar.toLocaleString()} kg
+                  </strong>{' '}
+                  across {existingChallans.length} challan(s).{' '}
+                  {keepsStock
+                    ? `${customer?.companyName || 'This customer'} keeps its material with us: this challan bills the bundles slit, whether or not they have been lifted. No stock balance is kept.`
+                    : 'No incoming weight was entered for this PO, so no balance is tracked.'}
+                </div>
+              ) : (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Total Inward Raw Material</span>
@@ -636,6 +652,7 @@ ${companyContactLine()}`;
                   )}
                 </div>
               </div>
+              )}
 
               {/* Generation Form */}
               <form onSubmit={handleCreateNewChallan} className="space-y-4">
@@ -818,11 +835,13 @@ ${companyContactLine()}`;
                           className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-sm"
                         />
                       </div>
+                      {tracked && (
                       <p className="col-span-2 sm:col-span-4 text-[11px] text-slate-500">
                         Still with you before this challan: <strong>{balanceRemaining.toFixed(2)} kg</strong>. This challan sends{' '}
                         <strong>{totalLeaving.toFixed(2)} kg</strong> ({newDispatchWeight.toFixed(2)} kg slit + {returnKg.toFixed(2)} kg unslit), leaving{' '}
                         <strong>{Math.max(0, balanceRemaining - totalLeaving).toFixed(2)} kg</strong>.
                       </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -896,11 +915,11 @@ ${companyContactLine()}`;
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Transporter Name *
+                      Transporter Name {keepsStock ? <span className="text-slate-400 font-normal">(Optional)</span> : '*'}
                     </label>
                     <input
                       type="text"
-                      required
+                      required={!keepsStock}
                       value={newTransporter}
                       onChange={(e) => setNewTransporter(e.target.value)}
                       placeholder="e.g. Express Road Lines"
@@ -934,6 +953,21 @@ ${companyContactLine()}`;
                     />
                   </div>
                 </div>
+
+                {!tracked && (
+                  <label className="flex items-start gap-2 text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={lastChallan}
+                      onChange={(e) => setLastChallan(e.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <strong>This is the last challan for this PO</strong> (everything is slit; no more material to come).
+                      Leave unticked for a part / month-end challan.
+                    </span>
+                  </label>
+                )}
 
                 {createError && (
                   <div className="text-xs text-red-900 bg-red-50 border border-red-200 rounded-xl p-3 flex items-start gap-2">

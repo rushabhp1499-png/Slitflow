@@ -334,13 +334,13 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Weight (kg) <span className="text-red-500">*</span>
+                  Weight (kg)
                 </label>
                 <input
                   type="number"
                   step={0.05}
-                  required
-                  min={0.05}
+                  min={0}
+                  placeholder="If known"
                   value={incomingWeight}
                   onChange={(e) => setIncomingWeight(e.target.value)}
                   onBlur={(e) => {
@@ -359,6 +359,7 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
                   type="number"
                   step="any"
                   min={0}
+                  placeholder="If known"
                   value={incomingLength}
                   onChange={(e) => setIncomingLength(e.target.value)}
                   className={inputClass}

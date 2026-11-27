@@ -3,6 +3,7 @@ import { useProduction } from '../context/ProductionContext';
 import { MaterialInward, ProductionStatus, DeliveryChallan } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { SIZE_MASTER_URL } from '../utils/sizeMaster';
+import { tracksWeight } from '../utils/floorPlan';
 import {
   Building2,
   Calendar,
@@ -152,6 +153,10 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
   const [specRequestJob, setSpecRequestJob] = useState<MaterialInward | null>(null);
   const dispatchedWeight = activeJob?.dispatchedWeightKg || 0;
   const remainingWeight = activeJob ? Math.max(0, activeJob.incomingWeight - dispatchedWeight) : 0;
+  // Customers who keep their material with us are billed monthly for what was slit; no stock balance is shown.
+  const keepsStock = !!currentCustomer?.keepsStock;
+  const sentLabel = keepsStock ? 'Billed' : 'Dispatched';
+  const weightText = (j: MaterialInward) => (tracksWeight(j) ? `${j.incomingWeight.toLocaleString()} kg` : 'Not given');
   const challansList = activeJob?.challans && activeJob.challans.length > 0
     ? activeJob.challans
     : activeJob?.challan
@@ -358,14 +363,14 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         {job.thickness}{job.thicknessUnit} × {job.incomingWidth}mm
                       </span>
                       <span className="font-bold text-slate-900">
-                        {job.incomingWeight.toLocaleString()} kg
+                        {weightText(job)}
                       </span>
                     </div>
 
                     {/* Dispatched info */}
                     {(job.dispatchedWeightKg || 0) > 0 && (
                       <div className="text-[11px] text-emerald-800 font-medium mt-1">
-                        Dispatched: {job.dispatchedWeightKg?.toLocaleString()} kg ({job.challans?.length || 1} Challan)
+                        {sentLabel}: {job.dispatchedWeightKg?.toLocaleString()} kg ({job.challans?.length || 1} Challan)
                       </div>
                     )}
 
@@ -514,16 +519,18 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs">
                   <div>
                     <span className="text-[11px] text-slate-500 block">Inward Raw Material Sent:</span>
-                    <span className="text-base font-black text-slate-900">{activeJob.incomingWeight.toLocaleString()} kg</span>
+                    <span className="text-base font-black text-slate-900">{weightText(activeJob)}</span>
                   </div>
                   <div>
-                    <span className="text-[11px] text-slate-500 block">Dispatched Finished Goods:</span>
+                    <span className="text-[11px] text-slate-500 block">{sentLabel} Finished Goods:</span>
                     <span className="text-base font-black text-emerald-800">{dispatchedWeight.toLocaleString()} kg</span>
                   </div>
-                  <div>
-                    <span className="text-[11px] text-slate-500 block">Remaining Material in Process:</span>
-                    <span className="text-base font-black text-blue-900">{remainingWeight.toLocaleString()} kg</span>
-                  </div>
+                  {tracksWeight(activeJob) && !keepsStock && (
+                    <div>
+                      <span className="text-[11px] text-slate-500 block">Remaining Material in Process:</span>
+                      <span className="text-base font-black text-blue-900">{remainingWeight.toLocaleString()} kg</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Progress strip */}
@@ -635,7 +642,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                     <div className="flex justify-between py-1 border-b border-slate-100">
                       <span className="text-slate-500">Gross Incoming Weight:</span>
                       <span className="font-black text-blue-900 text-sm">
-                        {activeJob.incomingWeight.toLocaleString()} kg
+                        {weightText(activeJob)}
                       </span>
                     </div>
                     <div className="flex justify-between py-1">
@@ -992,7 +999,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       Issued Delivery Challans ({challansList.length})
                     </span>
                     <span className="text-xs text-slate-500">
-                      Total Dispatched: <strong>{dispatchedWeight.toLocaleString()} kg</strong>
+                      Total {sentLabel}: <strong>{dispatchedWeight.toLocaleString()} kg</strong>
                     </span>
                   </div>
 

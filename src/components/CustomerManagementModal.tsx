@@ -89,6 +89,7 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
       email: editForm.email,
       phone: editForm.phone,
       whatsappUpdates: editForm.whatsappUpdates !== false,
+      keepsStock: !!editForm.keepsStock,
       gstNumber: editForm.gstNumber,
       panNumber: editForm.panNumber,
       registeredAddress: editForm.registeredAddress,
@@ -539,6 +540,20 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
                           onChange={(e) => setEditForm({ ...editForm, whatsappUpdates: e.target.checked })}
                         />
                         Send WhatsApp updates to this number
+                      </label>
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className="flex items-start gap-2 text-xs text-slate-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!editForm.keepsStock}
+                          onChange={(e) => setEditForm({ ...editForm, keepsStock: e.target.checked })}
+                          className="mt-0.5"
+                        />
+                        <span>
+                          <strong>Keeps its material with us</strong> (e.g. Dyna Electric). Whatever is slit is billed on a
+                          challan every month, lifted or not. No stock balance is shown; marking rolls as lifted is optional.
+                        </span>
                       </label>
                     </div>
                     <div>

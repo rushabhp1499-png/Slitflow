@@ -204,13 +204,21 @@ export function buildChallanPdf(challan: DeliveryChallan, job: MaterialInward): 
     margin: { left: margin, right: margin },
     theme: 'plain',
     styles: { fontSize: 8, cellPadding: 1.2, fontStyle: 'bold' },
-    body: [
-      [
-        `Material received: ${kg(challan.totalOrderWeightKg)} kg`,
-        `This challan: ${kg(challan.thisDispatchWeightKg)} kg`,
-        `Balance with us: ${kg(challan.remainingBalanceWeightKg)} kg`,
-      ],
-    ],
+    body:
+      challan.totalOrderWeightKg > 0 && !challan.billedOnly
+        ? [
+            [
+              `Material received: ${kg(challan.totalOrderWeightKg)} kg`,
+              `This challan: ${kg(challan.thisDispatchWeightKg)} kg`,
+              `Balance with us: ${kg(challan.remainingBalanceWeightKg)} kg`,
+            ],
+          ]
+        : [
+            [`This challan: ${kg(challan.thisDispatchWeightKg)} kg`],
+            ...(challan.billedOnly
+              ? [["Slit material billed on this challan. At the customer's request it may stay stored at our premises until collected."]]
+              : []),
+          ],
   });
 
   // Terms and signatures

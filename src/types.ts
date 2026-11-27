@@ -26,6 +26,9 @@ export interface Customer {
   state: string;
   stateCode: string;
   accessCode?: string;       // Direct tracking link code
+  // Customer's material stays with us after slitting (e.g. Dyna Electric): what is slit is billed on a
+  // challan every month whether or not it has been lifted, and we keep no stock balance for them.
+  keepsStock?: boolean;
 }
 
 export interface FactoryUser {
@@ -129,6 +132,9 @@ export interface BundleRecord {
   voidReason?: string;
   voidedAt?: string;
   voidedBy?: string;
+  // Keeps-stock customers: billed on a challan but still with us until lifted (marking it is optional)
+  liftedAt?: string;
+  liftedBy?: string;
 }
 
 export interface BundleSpecifications {
@@ -218,6 +224,8 @@ export interface DeliveryChallan {
   totalOrderWeightKg: number;
   thisDispatchWeightKg: number;    // e.g. 500 kg midway urgent delivery
   remainingBalanceWeightKg: number; // e.g. 752 kg remaining in factory
+  // Keeps-stock customer: bills what was slit; the bundles may stay stored with us until lifted.
+  billedOnly?: boolean;
   
   vehicleNo: string;
   transporterName: string;

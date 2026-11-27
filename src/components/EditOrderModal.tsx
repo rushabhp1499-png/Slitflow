@@ -62,7 +62,6 @@ export const EditOrderModal: React.FC<EditOrderModalProps> = ({ job, onClose }) 
   const save = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.customerPoNo.trim()) return setError('The PO number cannot be blank.');
-    if (num(form.incomingWeight) <= 0) return setError('Enter the incoming weight.');
     if (!reason.trim()) return setError('Write why you are changing this order.');
 
     const next: AdminOrderChanges = {

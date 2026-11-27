@@ -3,7 +3,7 @@ import { useProduction } from '../context/ProductionContext';
 import { Customer, MaterialInward } from '../types';
 import { formatKg } from '../utils/weight';
 import { STATUS_LABEL, exportJobsToExcel } from '../utils/excelExport';
-import { isOpenOrder } from '../utils/floorPlan';
+import { isOpenOrder, tracksWeight } from '../utils/floorPlan';
 import { ChevronDown, ChevronRight, FileSpreadsheet } from 'lucide-react';
 
 const isClosed = (j: MaterialInward) => j.poStatus === 'closed' || j.status === 'po_closed';
@@ -33,11 +33,15 @@ export const CustomerOrdersPanel: React.FC<{ customer: Customer }> = ({ customer
     .sort()
     .pop();
 
+  // Keeps-stock customers (e.g. Dyna): challans bill what was slit, and no stock balance is kept.
+  const sent = customer.keepsStock ? 'Billed' : 'Dispatched';
   const stats = [
     { label: 'Pending POs', value: `${pending.length} of ${mine.length}` },
-    { label: 'Material with us', value: `${formatKg(sum(pending, balance))} kg` },
+    ...(customer.keepsStock
+      ? []
+      : [{ label: 'Material with us', value: `${formatKg(sum(pending.filter(tracksWeight), balance))} kg` }]),
     { label: 'Received (all time)', value: `${formatKg(sum(mine, (j) => j.incomingWeight))} kg` },
-    { label: 'Dispatched (all time)', value: `${formatKg(sum(mine, (j) => j.dispatchedWeightKg || 0))} kg` },
+    { label: `${sent} (all time)`, value: `${formatKg(sum(mine, (j) => j.dispatchedWeightKg || 0))} kg` },
     { label: 'Challans', value: String(sum(mine, (j) => activeChallans(j).length)) },
     { label: 'Last dispatch', value: shortDate(lastDispatch) },
   ];
@@ -100,7 +104,7 @@ export const CustomerOrdersPanel: React.FC<{ customer: Customer }> = ({ customer
                 <th className="text-left px-2 py-1.5">PO</th>
                 <th className="text-left px-2 py-1.5 hidden lg:table-cell">Material</th>
                 <th className="text-right px-2 py-1.5">In (kg)</th>
-                <th className="text-right px-2 py-1.5">Sent (kg)</th>
+                <th className="text-right px-2 py-1.5">{customer.keepsStock ? 'Billed' : 'Sent'} (kg)</th>
                 <th className="text-right px-2 py-1.5">Balance</th>
                 <th className="text-left px-2 py-1.5">Stage</th>
                 <th className="text-left px-2 py-1.5">Due</th>
@@ -128,9 +132,11 @@ export const CustomerOrdersPanel: React.FC<{ customer: Customer }> = ({ customer
                           {j.thickness} {j.thicknessUnit} × {j.incomingWidth} mm
                         </div>
                       </td>
-                      <td className="px-2 py-1.5 text-right font-mono">{formatKg(j.incomingWeight)}</td>
+                      <td className="px-2 py-1.5 text-right font-mono">{tracksWeight(j) ? formatKg(j.incomingWeight) : '—'}</td>
                       <td className="px-2 py-1.5 text-right font-mono text-emerald-700">{formatKg(j.dispatchedWeightKg || 0)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono font-bold">{formatKg(balance(j))}</td>
+                      <td className="px-2 py-1.5 text-right font-mono font-bold">
+                        {tracksWeight(j) && !customer.keepsStock ? formatKg(balance(j)) : '—'}
+                      </td>
                       <td className="px-2 py-1.5">
                         <div className={isClosed(j) ? 'text-slate-400' : 'text-slate-800 font-semibold'}>
                           {isClosed(j) ? 'PO closed' : STATUS_LABEL[j.status] || j.status}

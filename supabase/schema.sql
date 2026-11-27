@@ -1063,7 +1063,9 @@ begin
     -- Skip old records being imported
     if coalesce((n ->> 'createdAt')::timestamptz, now()) > now() - interval '1 day' then
       perform whatsapp_notify(n, cu, 'material_received',
-        array[who, po, coalesce(n ->> 'incomingWeight', '-'), coalesce(n ->> 'grade', 'material')]);
+        array[who, po,
+          case when coalesce((n ->> 'incomingWeight')::numeric, 0) > 0 then n ->> 'incomingWeight' else '-' end,
+          coalesce(n ->> 'grade', 'material')]);
     end if;
     return null;
   end if;
@@ -1076,12 +1078,16 @@ begin
       array[who, po, to_char((n ->> 'estimatedDeliveryDate')::date, 'DD Mon YYYY')]);
   end if;
 
+  -- A month-end billing challan for a customer who keeps stock with us is not a dispatch: no message.
+  -- No balance is quoted when the incoming weight was not entered.
   for c in select * from jsonb_array_elements(coalesce(n -> 'challans', '[]'::jsonb)) loop
     if coalesce((c ->> 'isSuperseded')::boolean, false) = false
+       and coalesce((c ->> 'billedOnly')::boolean, false) = false
        and not exists (select 1 from jsonb_array_elements(coalesce(o -> 'challans', '[]'::jsonb)) x where x ->> 'id' = c ->> 'id') then
       perform whatsapp_notify(n, cu, 'material_dispatched', array[
         who, po, c ->> 'challanNo', c ->> 'thisDispatchWeightKg', coalesce(c ->> 'totalBundles', '0'),
-        coalesce(nullif(nullif(c ->> 'vehicleNo', ''), '—'), '-'), coalesce(c ->> 'remainingBalanceWeightKg', '-')]);
+        coalesce(nullif(nullif(c ->> 'vehicleNo', ''), '—'), '-'),
+        case when coalesce((c ->> 'totalOrderWeightKg')::numeric, 0) > 0 then coalesce(c ->> 'remainingBalanceWeightKg', '-') else '-' end]);
     end if;
   end loop;
 

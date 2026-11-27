@@ -252,6 +252,8 @@ interface ProductionContextType {
     }
   ) => void;
   voidBundleInJob: (jobId: string, bundleId: string, reason: string, voidedBy?: string) => void;
+  // Keeps-stock customers: mark a billed bundle as collected (or undo). Optional bookkeeping only.
+  setBundleLifted: (jobId: string, bundleId: string, lifted: boolean) => void;
 
   // Customer Specification Change Requests & Backtrack Approval
   requestSpecChange: (
@@ -1073,6 +1075,27 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     );
   };
 
+  const setBundleLifted: ProductionContextType['setBundleLifted'] = (jobId, bundleId, lifted) => {
+    const nowIso = new Date().toISOString();
+    setJobs(prev =>
+      prev.map(j =>
+        j.id !== jobId
+          ? j
+          : {
+              ...j,
+              bundles: (j.bundles || []).map(b =>
+                b.id !== bundleId
+                  ? b
+                  : lifted
+                  ? { ...b, liftedAt: nowIso, liftedBy: actorName }
+                  : { ...b, liftedAt: undefined, liftedBy: undefined }
+              ),
+              updatedAt: nowIso,
+            }
+      )
+    );
+  };
+
   // Owner/developer: change any detail of an order. The reason is saved on the order and in the activity log.
   const adminUpdateOrder: ProductionContextType['adminUpdateOrder'] = (jobId, changes, reason) => {
     const nowIso = new Date().toISOString();
@@ -1441,6 +1464,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       totalOrderWeightKg: job.incomingWeight,
       thisDispatchWeightKg: dispatchWeight,
       remainingBalanceWeightKg: remainingBalance,
+      billedOnly: customer?.keepsStock ? true : undefined,
       vehicleNo: params.vehicleNo.toUpperCase(),
       transporterName: params.transporterName || '',
       driverPhone: params.driverPhone,
@@ -1501,9 +1525,13 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         params.dispatchType === 'partial'
           ? `PARTIAL DELIVERY CHALLAN (${sequenceNumber}) against customer Purchase Order ${job.customerPoNo}.`
           : `FINAL DELIVERY CHALLAN against customer Purchase Order ${job.customerPoNo}.`,
-        params.dispatchType === 'partial'
+        customer?.keepsStock
+          ? 'Material slit as above is billed on this challan. At the customer\'s request it may stay stored at our premises until collected; the customer keeps the record of its stock with us.'
+          : params.dispatchType === 'final'
+          ? 'All inward raw material accounted for and delivered back to customer.'
+          : job.incomingWeight > 0
           ? `Remaining raw material balance of ${remainingBalance.toLocaleString()} kg is currently in progress at Progressive Enterprises.`
-          : 'All inward raw material accounted for and delivered back to customer.',
+          : 'Balance material of this order is in progress at Progressive Enterprises.',
         'Goods processed and returned under Rule 55 of CGST Rules 2017 for Job-Work transactions.',
         'Subject to Bhiwandi / Thane jurisdiction only.',
       ],
@@ -1949,7 +1977,11 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       job.customerName,
       'po_closed',
       `PO ${job.customerPoNo} Permanently Closed by Factory Master`,
-      `${closedBy} has permanently closed Purchase Order ${job.customerPoNo} for ${job.customerName}. Reconciliation: ${job.incomingWeight.toLocaleString()} kg inward raw material fully accounted for across ${job.challans?.length || 1} delivery challan(s).`
+      `${closedBy} has permanently closed Purchase Order ${job.customerPoNo} for ${job.customerName}. ${
+        job.incomingWeight > 0
+          ? `Reconciliation: ${job.incomingWeight.toLocaleString()} kg inward raw material fully accounted for across ${job.challans?.length || 1} delivery challan(s).`
+          : `${job.challans?.length || 0} challan(s) issued.`
+      }`
     );
   };
 
@@ -2436,6 +2468,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         dismissLocalImport,
         staffRole,
         isAdmin,
+        setBundleLifted,
         adminUpdateOrder,
         deleteOrder,
         deleteCustomer,

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useProduction } from '../context/ProductionContext';
 import { MaterialInward } from '../types';
+import { tracksWeight } from '../utils/floorPlan';
 import {
   Lock,
   CheckCircle2,
@@ -20,8 +21,11 @@ interface PoCloseModalProps {
 export const PoCloseModal: React.FC<PoCloseModalProps> = ({ job, onClose }) => {
   const { closeCustomerPo } = useProduction();
 
+  const tracked = tracksWeight(job);
   const [closingNotes, setClosingNotes] = useState(
-    `All slitted material delivered in full reconciliation. Inward raw material ${job.incomingWeight} kg fully accounted for. PO permanently closed.`
+    tracked
+      ? `All slitted material delivered in full reconciliation. Inward raw material ${job.incomingWeight} kg fully accounted for. PO permanently closed.`
+      : 'Slitting for this PO is complete and billed on its challans. PO permanently closed.'
   );
   // Blank means "the signed-in user" (filled in by the data layer).
   const [closedByName, setClosedByName] = useState('');
@@ -90,7 +94,7 @@ export const PoCloseModal: React.FC<PoCloseModalProps> = ({ job, onClose }) => {
 
             <div className="flex justify-between py-1 border-b border-slate-100">
               <span className="text-slate-600">Inward Raw Material Received:</span>
-              <span className="font-black text-blue-900">{job.incomingWeight.toLocaleString()} kg</span>
+              <span className="font-black text-blue-900">{tracked ? `${job.incomingWeight.toLocaleString()} kg` : 'Not given'}</span>
             </div>
 
             <div className="flex justify-between py-1 border-b border-slate-100">
@@ -103,6 +107,7 @@ export const PoCloseModal: React.FC<PoCloseModalProps> = ({ job, onClose }) => {
               <span className="font-bold text-slate-800">{scrapWeight.toLocaleString()} kg</span>
             </div>
 
+            {tracked && (
             <div className="flex justify-between py-1 bg-emerald-50/80 p-2 rounded-lg text-emerald-900">
               <span className="font-semibold">Reconciled Balance / Status:</span>
               <span className="font-black">
@@ -113,6 +118,7 @@ export const PoCloseModal: React.FC<PoCloseModalProps> = ({ job, onClose }) => {
                   : `${variance.toLocaleString()} kg accounted`}
               </span>
             </div>
+            )}
 
             <div className="flex justify-between text-[11px] text-slate-500 pt-1">
               <span>Challans Issued:</span>
