@@ -1,8 +1,84 @@
 @import "tailwindcss";
 
+/* PE Global brand (Brand Book v1.0): orange #F36422 and charcoal #1F1F1F, cream/white backgrounds, Poppins.
+   The app's "blue" accent becomes the brand orange and "slate" becomes the warm charcoal/cream scale,
+   so every screen follows the brand from here. Green, red and amber stay for status only. */
+@theme {
+  --font-sans: 'Poppins', 'Segoe UI', Arial, sans-serif;
+
+  --color-blue-50: #fff5ef;
+  --color-blue-100: #fee8dc;
+  --color-blue-200: #fdd3bc;
+  --color-blue-300: #fbb592;
+  --color-blue-400: #f99566;
+  --color-blue-500: #f67a43;
+  --color-blue-600: #f36422;
+  --color-blue-700: #d4531a;
+  --color-blue-800: #b8460f;
+  --color-blue-900: #8a3510;
+  --color-blue-950: #4a1c08;
+
+  --color-indigo-50: #fff5ef;
+  --color-indigo-100: #fee8dc;
+  --color-indigo-200: #fdd3bc;
+  --color-indigo-300: #fbb592;
+  --color-indigo-400: #f99566;
+  --color-indigo-500: #f67a43;
+  --color-indigo-600: #f36422;
+  --color-indigo-700: #d4531a;
+  --color-indigo-800: #b8460f;
+  --color-indigo-900: #8a3510;
+  --color-indigo-950: #4a1c08;
+
+  --color-sky-50: #fff5ef;
+  --color-sky-100: #fee8dc;
+  --color-sky-200: #fdd3bc;
+  --color-sky-300: #fbb592;
+  --color-sky-400: #f99566;
+  --color-sky-500: #f67a43;
+  --color-sky-600: #f36422;
+  --color-sky-700: #d4531a;
+  --color-sky-800: #b8460f;
+  --color-sky-900: #8a3510;
+
+  --color-violet-50: #f7f4ee;
+  --color-violet-100: #efebe3;
+  --color-violet-200: #e4ded4;
+  --color-violet-300: #cfc8bc;
+  --color-violet-400: #a39d93;
+  --color-violet-500: #7a756d;
+  --color-violet-600: #4a4744;
+  --color-violet-700: #3a3835;
+  --color-violet-800: #2e2d2b;
+  --color-violet-900: #1f1f1f;
+
+  --color-purple-50: #f7f4ee;
+  --color-purple-100: #efebe3;
+  --color-purple-200: #e4ded4;
+  --color-purple-300: #cfc8bc;
+  --color-purple-400: #a39d93;
+  --color-purple-500: #7a756d;
+  --color-purple-600: #4a4744;
+  --color-purple-700: #3a3835;
+  --color-purple-800: #2e2d2b;
+  --color-purple-900: #1f1f1f;
+
+  --color-slate-50: #f7f4ee;
+  --color-slate-100: #efebe3;
+  --color-slate-200: #e4ded4;
+  --color-slate-300: #cfc8bc;
+  --color-slate-400: #a39d93;
+  --color-slate-500: #7a756d;
+  --color-slate-600: #5c5853;
+  --color-slate-700: #4a4744;
+  --color-slate-800: #2e2d2b;
+  --color-slate-900: #1f1f1f;
+  --color-slate-950: #141414;
+}
+
 @layer base {
   body {
-    font-family: 'Poppins', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: 'Poppins', 'Segoe UI', Arial, sans-serif;
   }
 }
 
@@ -12,7 +88,7 @@
 @keyframes dash-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes dash-pulse { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); } 70%, 100% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); } }
 @keyframes dash-stripes { to { background-position: 24px 0; } }
-@keyframes dash-flash { 0% { background-color: #bfdbfe; } 100% { background-color: transparent; } }
+@keyframes dash-flash { 0% { background-color: #fdd3bc; } 100% { background-color: transparent; } }
 @keyframes dash-toast { from { opacity: 0; transform: translateY(16px) scale(0.97); } to { opacity: 1; transform: none; } }
 @keyframes dash-reveal {
   from { max-height: 0; opacity: 0; overflow: hidden; }

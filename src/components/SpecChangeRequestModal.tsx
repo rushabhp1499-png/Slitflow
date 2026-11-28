@@ -87,7 +87,7 @@ export const SpecChangeRequestModal: React.FC<SpecChangeRequestModalProps> = ({ 
             <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
             <h3 className="text-base font-bold text-slate-900">Change request sent</h3>
             <p className="text-xs text-slate-500 max-w-md mx-auto">
-              Progressive Enterprises will review it. You'll see their decision on this order.
+              Progressive Enterprises Global will review it. You'll see their decision on this order.
             </p>
           </div>
         ) : (

@@ -530,7 +530,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         if (cancelled) return;
         if (!acc) {
           reportSyncError(
-            'This email is not linked to any company yet. Ask Progressive Enterprises to add your email to your company, or create a new account.'
+            'This email is not linked to any company yet. Ask Progressive Enterprises Global to add your email to your company, or create a new account.'
           );
           void supabase!.auth.signOut();
         }
@@ -841,7 +841,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         await supabase.auth.signOut();
         return {
           success: false,
-          message: 'This email is not linked to any company yet. Ask Progressive Enterprises to add your email, or create a new account.',
+          message: 'This email is not linked to any company yet. Ask Progressive Enterprises Global to add your email, or create a new account.',
         };
       }
       setSessionUserId(data.user.id);
@@ -864,7 +864,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       };
     }
     setActiveRole('factory');
-    return { success: true, message: 'Factory access authorized. Welcome to Progressive Enterprises Dashboard.' };
+    return { success: true, message: 'Factory access authorized. Welcome to Progressive Enterprises Global Dashboard.' };
   };
 
   const loginCustomerByEmail = async (email: string, password: string): Promise<AuthResult> => {
@@ -1318,7 +1318,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           job.customerName,
           'edd_updated',
           `Estimated Delivery Date Scheduled: ${eddDate}`,
-          `Progressive Enterprises committed delivery date ${eddDate} for PO ${job.customerPoNo} (${job.grade}).`
+          `Progressive Enterprises Global committed delivery date ${eddDate} for PO ${job.customerPoNo} (${job.grade}).`
         );
 
         return {
@@ -1538,8 +1538,8 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           : params.dispatchType === 'final'
           ? 'All inward raw material accounted for and delivered back to customer.'
           : job.incomingWeight > 0
-          ? `Remaining raw material balance of ${remainingBalance.toLocaleString()} kg is currently in progress at Progressive Enterprises.`
-          : 'Balance material of this order is in progress at Progressive Enterprises.',
+          ? `Remaining raw material balance of ${remainingBalance.toLocaleString()} kg is currently in progress at Progressive Enterprises Global.`
+          : 'Balance material of this order is in progress at Progressive Enterprises Global.',
         'Goods processed and returned under Rule 55 of CGST Rules 2017 for Job-Work transactions.',
         'Subject to Bhiwandi / Thane jurisdiction only.',
       ],

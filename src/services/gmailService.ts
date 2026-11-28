@@ -37,7 +37,7 @@ function toBase64Url(str: string): string {
  * Constructs RFC 2822 formatted email message
  */
 function createMimeMessage({
-  fromName = 'Progressive Enterprises Precision Slitting',
+  fromName = 'Progressive Enterprises Global',
   fromEmail = 'progressive.ent8@gmail.com',
   recipients,
   subject,
@@ -95,7 +95,7 @@ export async function sendEmailViaGmailApi(params: SendEmailParams): Promise<Sen
     htmlBody,
     plainTextBody,
     fromEmail: fromEmail || 'progressive.ent8@gmail.com',
-    fromName: fromName || 'Progressive Enterprises Precision Slitting Works',
+    fromName: fromName || 'Progressive Enterprises Global',
   });
 
   const rawBase64Url = toBase64Url(mimeString);
@@ -148,11 +148,11 @@ export function buildChallanEmailTemplates(
   const transporter = challan.transporterName || 'Direct Delivery';
   const url = trackingUrl || window.location.origin;
 
-  const subject = `Delivery Challan #${challan.challanNo} - Progressive Enterprises (PO #${job.customerPoNo})`;
+  const subject = `Delivery Challan #${challan.challanNo} - Progressive Enterprises Global (PO #${job.customerPoNo})`;
 
   const plainTextBody = `Dear ${custName} Team,
 
-Greetings from Progressive Enterprises Precision Slitting Works.
+Greetings from Progressive Enterprises Global.
 
 Please find below the official dispatch advice and delivery challan for your Purchase Order #${job.customerPoNo}:
 
@@ -179,7 +179,7 @@ ${companyContactLine()}
 
 Best regards,
 Dispatch In-Charge
-Progressive Enterprises Precision Slitting Works`;
+Progressive Enterprises Global`;
 
   const htmlBody = `<!DOCTYPE html>
 <html>
@@ -187,23 +187,23 @@ Progressive Enterprises Precision Slitting Works`;
   <meta charset="utf-8">
   <title>Delivery Challan #${challan.challanNo}</title>
 </head>
-<body style="margin: 0; padding: 24px; font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #f8fafc; color: #1e293b;">
+<body style="margin: 0; padding: 24px; font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #F7F4EE; color: #1F1F1F;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 650px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
     <!-- Header Banner -->
     <tr>
-      <td style="background: #0f172a; padding: 24px; color: #ffffff; text-align: left;">
+      <td style="background: #1F1F1F; padding: 24px; color: #ffffff; text-align: left;">
         <table width="100%" cellpadding="0" cellspacing="0">
           <tr>
             <td>
               <h1 style="margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.5px; color: #ffffff;">
-                PROGRESSIVE ENTERPRISES
+                PROGRESSIVE ENTERPRISES GLOBAL
               </h1>
               <p style="margin: 4px 0 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8;">
                 Precision Cold Rolled & Stainless Steel Slitting Works
               </p>
             </td>
             <td style="text-align: right;">
-              <span style="display: inline-block; background: #2563eb; color: #ffffff; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; text-transform: uppercase;">
+              <span style="display: inline-block; background: #F36422; color: #ffffff; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; text-transform: uppercase;">
                 E-Challan Advice
               </span>
             </td>
@@ -226,10 +226,10 @@ Progressive Enterprises Precision Slitting Works`;
         <table width="100%" cellpadding="0" cellspacing="0" style="background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 24px;">
           <tr>
             <td style="padding: 16px;">
-              <table width="100%" cellpadding="6" cellspacing="0" style="font-size: 13px; color: #1e293b;">
+              <table width="100%" cellpadding="6" cellspacing="0" style="font-size: 13px; color: #1F1F1F;">
                 <tr style="border-bottom: 1px solid #e2e8f0;">
                   <td width="40%" style="color: #64748b; font-weight: 600;">Delivery Challan No:</td>
-                  <td width="60%" style="font-weight: 700; font-family: monospace; color: #0f172a; font-size: 14px;">${challan.challanNo}</td>
+                  <td width="60%" style="font-weight: 700; font-family: monospace; color: #1F1F1F; font-size: 14px;">${challan.challanNo}</td>
                 </tr>
                 <tr style="border-bottom: 1px solid #e2e8f0;">
                   <td style="color: #64748b; font-weight: 600;">Challan Date:</td>
@@ -237,7 +237,7 @@ Progressive Enterprises Precision Slitting Works`;
                 </tr>
                 <tr style="border-bottom: 1px solid #e2e8f0;">
                   <td style="color: #64748b; font-weight: 600;">Customer PO No:</td>
-                  <td style="font-weight: 700; color: #1d4ed8;">${job.customerPoNo}</td>
+                  <td style="font-weight: 700; color: #B8460F;">${job.customerPoNo}</td>
                 </tr>
                 <tr style="border-bottom: 1px solid #e2e8f0;">
                   <td style="color: #64748b; font-weight: 600;">Material Grade & Gauge:</td>
@@ -272,7 +272,7 @@ Progressive Enterprises Precision Slitting Works`;
         <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
           <tr>
             <td align="center">
-              <a href="${url}" style="display: inline-block; background: #0f172a; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 14px; font-weight: 700; letter-spacing: 0.3px;">
+              <a href="${url}" style="display: inline-block; background: #1F1F1F; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 14px; font-weight: 700; letter-spacing: 0.3px;">
                 View & Print Official Challan &rarr;
               </a>
             </td>
@@ -285,7 +285,7 @@ Progressive Enterprises Precision Slitting Works`;
 
         <!-- Sender & Company Footer -->
         <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; margin-top: 24px; font-size: 12px; color: #64748b; line-height: 1.6;">
-          <p style="margin: 0; font-weight: 700; color: #0f172a;">Progressive Enterprises Precision Slitting Works</p>
+          <p style="margin: 0; font-weight: 700; color: #1F1F1F;">Progressive Enterprises Global</p>
           <p style="margin: 2px 0;">Shed no. H-11/5,6, Shree Arihant Compound, Kalher, Bhiwandi, Maharashtra - 421302</p>
           <p style="margin: 2px 0;">${companyContactLine()}</p>
         </div>

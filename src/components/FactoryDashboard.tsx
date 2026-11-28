@@ -278,7 +278,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-slate-400">
-              Progressive Enterprises • Precision Slitting & Works Management
+              Progressive Enterprises Global • Materials. Converted for Purpose.
             </p>
           </div>
         </div>
@@ -379,7 +379,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             title="Create Incoming Raw Material Inward"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>+ Material Inward</span>
+            <span>Material Inward</span>
           </button>
         </div>
       </div>

@@ -250,7 +250,7 @@ function MainAppContent() {
           <LoginPage />
         </main>
         <footer className="no-print bg-white border-t border-slate-200 text-slate-500 py-4 text-xs text-center px-4">
-          {COMPANY_INFO.name} • Industrial Precision Slitting Facility • Shed no. H-11/5,6, Shree Arihant Compound, Kalher, Bhiwandi, Maharashtra - 421302
+          {COMPANY_INFO.displayName} • {COMPANY_INFO.tagline} • {COMPANY_INFO.address}
         </footer>
       </div>
     );
@@ -379,14 +379,12 @@ function MainAppContent() {
       )}
 
       {/* Application Footer (Hidden during printing) */}
-      <footer className="no-print bg-slate-900 border-t border-slate-800 text-slate-400 py-6 text-xs mt-auto">
+      <footer className="no-print bg-slate-900 border-t-2 border-blue-600 text-slate-400 py-6 text-xs mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span
-              style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
-              className="font-normal text-slate-200"
-            >
-              {COMPANY_INFO.name}
+            <img src="/pe-logo.svg" alt="" className="h-4 w-auto" />
+            <span className="text-slate-200">
+              <span className="font-bold">Progressive</span> Enterprises Global
             </span>
             <span>•</span>
             <span>{COMPANY_INFO.tagline}</span>

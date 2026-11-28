@@ -51,7 +51,7 @@ export const EmailDispatchModal: React.FC<EmailDispatchModalProps> = ({
   const emailTemplates = activeChallan
     ? buildChallanEmailTemplates(job, activeChallan, customer, trackingUrl)
     : {
-        subject: `Production Status Update - Progressive Enterprises (PO #${job.customerPoNo})`,
+        subject: `Production Status Update - Progressive Enterprises Global (PO #${job.customerPoNo})`,
         plainTextBody: `Status update for PO #${job.customerPoNo}`,
         htmlBody: `<p>Status update for PO #${job.customerPoNo}</p>`,
       };

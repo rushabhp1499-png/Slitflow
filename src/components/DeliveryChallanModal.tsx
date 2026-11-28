@@ -338,7 +338,7 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job:
       ? customer.authorizedEmails
       : [customer?.email || job.customerEmail].filter(Boolean);
     setEmailRecipients(allEmails.join(', '));
-    setEmailSubject(`Delivery Challan #${activeChallan.challanNo} - Progressive Enterprises (PO #${job.customerPoNo})`);
+    setEmailSubject(`Delivery Challan #${activeChallan.challanNo} - Progressive Enterprises Global (PO #${job.customerPoNo})`);
     setEmailCopied(false);
     setIsEmailModalOpen(true);
   };
@@ -353,7 +353,7 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job:
     if (!activeChallan) return '';
     const trackingUrl = getTrackingUrl();
     const custName = customer?.companyName || job.customerName;
-    return `*PROGRESSIVE ENTERPRISES*
+    return `*PROGRESSIVE ENTERPRISES GLOBAL*
 *DELIVERY CHALLAN DISPATCH ADVICE*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 *Challan No:* ${activeChallan.challanNo}
@@ -369,7 +369,7 @@ export const DeliveryChallanModal: React.FC<DeliveryChallanModalProps> = ({ job:
 🔗 *Live Tracking & Digital Challan:*
 ${trackingUrl}
 
-_Progressive Enterprises Precision Slitting Works, Bhiwandi_
+_Progressive Enterprises Global, Bhiwandi_
 _Official Dispatch Email: progressive.ent8@gmail.com_`;
   };
 
@@ -379,7 +379,7 @@ _Official Dispatch Email: progressive.ent8@gmail.com_`;
     const custName = customer?.companyName || job.customerName;
     return `Dear ${custName} Team,
 
-Greetings from Progressive Enterprises.
+Greetings from Progressive Enterprises Global.
 
 Please find below the dispatch advice for Delivery Challan #${activeChallan.challanNo}:
 
@@ -403,7 +403,7 @@ ${trackingUrl}
 This advice was dispatched from our official email ID: progressive.ent8@gmail.com.
 
 For any inquiries or dispatch reconciliation, please reach out to:
-Progressive Enterprises Precision Slitting Works
+Progressive Enterprises Global
 Shed no. H-11/5,6, Shree Arihant Compound, Kalher, Bhiwandi, Maharashtra - 421302
 ${companyContactLine()}`;
   };

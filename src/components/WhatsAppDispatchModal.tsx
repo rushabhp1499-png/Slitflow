@@ -43,7 +43,7 @@ export const WhatsAppDispatchModal: React.FC<WhatsAppDispatchModalProps> = ({
 
   const buildMessage = () => {
     if (activeChallan) {
-      return `*PROGRESSIVE ENTERPRISES*
+      return `*PROGRESSIVE ENTERPRISES GLOBAL*
 *DELIVERY CHALLAN DISPATCH ADVICE*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 *Challan No:* ${activeChallan.challanNo}
@@ -62,7 +62,7 @@ ${trackingUrl}
 _Official Dispatch Email: progressive.ent8@gmail.com_`;
     }
 
-    return `*PROGRESSIVE ENTERPRISES*
+    return `*PROGRESSIVE ENTERPRISES GLOBAL*
 *PRODUCTION & DISPATCH UPDATE*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 🏢 *Customer:* ${custName}

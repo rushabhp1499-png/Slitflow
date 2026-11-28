@@ -161,7 +161,7 @@ export const LiveFloor: React.FC = () => {
           </button>
           <div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight">LIVE FLOOR</h1>
-            <p className="text-slate-400 text-sm">Progressive Enterprises • Planner</p>
+            <p className="text-slate-400 text-sm">Progressive Enterprises Global • Planner</p>
           </div>
         </div>
 

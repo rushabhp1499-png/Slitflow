@@ -77,7 +77,7 @@ export const PoCloseModal: React.FC<PoCloseModalProps> = ({ job, onClose }) => {
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <div>
               <span className="font-bold block mb-0.5">Factory Master Final Closure Action</span>
-              Closing this PO permanently locks this order. Both Progressive Enterprises and {job.customerName} will see this order as Permanently Closed & Audited.
+              Closing this PO permanently locks this order. Both Progressive Enterprises Global and {job.customerName} will see this order as Permanently Closed & Audited.
             </div>
           </div>
 

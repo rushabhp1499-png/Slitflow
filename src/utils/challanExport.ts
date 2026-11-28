@@ -85,7 +85,7 @@ export function buildChallanPdf(challan: DeliveryChallan, job: MaterialInward): 
     margin: { left: margin, right: margin },
     theme: 'grid',
     styles: { fontSize: 8, cellPadding: 1.4, valign: 'top', lineColor: [210, 214, 220] },
-    headStyles: { fillColor: [241, 245, 249], textColor: 20, fontStyle: 'bold' },
+    headStyles: { fillColor: [247, 244, 238], textColor: 20, fontStyle: 'bold' },
     head: [['Consignee (Customer)', 'Dispatch Details']],
     body: [
       [
@@ -131,7 +131,7 @@ export function buildChallanPdf(challan: DeliveryChallan, job: MaterialInward): 
     margin: { left: margin, right: margin },
     theme: 'striped',
     styles: { fontSize: 8, cellPadding: 1.4 },
-    headStyles: { fillColor: [15, 23, 42], textColor: 255 },
+    headStyles: { fillColor: [31, 31, 31], textColor: 255 },
     head: [['#', 'Description of goods', 'Bundles', 'Rolls', 'Net kg']],
     body: goodsRows,
     foot: [
@@ -143,7 +143,7 @@ export function buildChallanPdf(challan: DeliveryChallan, job: MaterialInward): 
         { content: kg(slitNet + (returned?.weightKg || 0)), styles: { halign: 'right' } },
       ],
     ],
-    footStyles: { fillColor: [241, 245, 249], textColor: 20, fontStyle: 'bold' },
+    footStyles: { fillColor: [247, 244, 238], textColor: 20, fontStyle: 'bold' },
     columnStyles: {
       0: { cellWidth: 7 },
       2: { halign: 'right', cellWidth: 17 },
@@ -172,7 +172,7 @@ export function buildChallanPdf(challan: DeliveryChallan, job: MaterialInward): 
       margin: { left: margin, right: margin },
       theme: 'grid',
       styles: { fontSize: 7.3, cellPadding: 0.9, lineColor: [215, 219, 225] },
-      headStyles: { fillColor: [51, 65, 85], textColor: 255, fontSize: 7.3 },
+      headStyles: { fillColor: [74, 71, 68], textColor: 255, fontSize: 7.3 },
       head: [['Bundle', 'Gross kg', 'Net kg', 'Bundle', 'Gross kg', 'Net kg', 'Bundle', 'Gross kg', 'Net kg']],
       body: rows,
       columnStyles: {

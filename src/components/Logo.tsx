@@ -16,7 +16,7 @@ export const Logo: React.FC<LogoProps> = ({
     <div className="flex items-center gap-2.5 select-none">
       <img
         src="/pe-logo.svg"
-        alt="Progressive Enterprises Logo"
+        alt="Progressive Enterprises Global Logo"
         className={`${className} object-contain shrink-0`}
       />
       {showText && (

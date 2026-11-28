@@ -191,24 +191,13 @@ export const LoginPage: React.FC = () => {
 
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center h-16 w-32 bg-white rounded-2xl p-2.5 shadow-sm border border-slate-200 mb-4">
-            <img
-              src="/pe-logo.svg"
-              alt="Progressive Enterprises Logo"
-              className="h-full w-full object-contain"
-            />
-          </div>
-          <h1
-            style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
-            className="text-2xl sm:text-3xl font-normal text-slate-900 tracking-normal"
-          >
-            Progressive Enterprises Global
+          <img src="/pe-logo.svg" alt="Progressive Enterprises Global" className="h-14 w-auto mx-auto mb-4" />
+          <h1 className="text-2xl sm:text-3xl text-slate-900 tracking-normal">
+            <span className="font-bold">Progressive</span> <span className="font-normal">Enterprises Global</span>
           </h1>
-          <p className="text-xs uppercase font-medium tracking-wider text-blue-700 mt-1">
-            Precision Slitting Works & Live Dispatch Portal
-          </p>
-          <p className="text-xs text-slate-500 mt-1">
-            Secure client workspace & industrial dispatch management
+          <p className="text-sm text-slate-600 mt-1">Materials. Converted for Purpose.</p>
+          <p className="text-xs uppercase font-semibold tracking-wider text-blue-800 mt-2">
+            Customer &amp; Factory Portal
           </p>
         </div>
 
@@ -582,7 +571,7 @@ export const LoginPage: React.FC = () => {
                       Restricted Factory Management Access
                     </span>
                     <p className="text-slate-700 mt-0.5">
-                      This area is strictly for Progressive Enterprises factory management, machine shop operators, and dispatch masters.
+                      This area is strictly for Progressive Enterprises Global factory management, machine shop operators, and dispatch masters.
                     </p>
                   </div>
                 </div>

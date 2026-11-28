@@ -172,7 +172,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
           <ShieldCheck className="w-8 h-8 text-blue-600 mx-auto" />
           <h2 className="text-lg font-bold text-slate-900">Loading your company account...</h2>
           <p className="text-xs text-slate-600">
-            If this does not finish, your email may no longer be authorized. Please contact Progressive Enterprises.
+            If this does not finish, your email may no longer be authorized. Please contact Progressive Enterprises Global.
           </p>
           <button
             type="button"
@@ -303,7 +303,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
           <Package className="w-12 h-12 mx-auto mb-2 text-slate-300" />
           <h3 className="font-bold text-slate-700 text-base">No Materials Currently at Factory</h3>
           <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-            You currently have no active or completed slitting jobs with Progressive Enterprises.
+            You currently have no active or completed slitting jobs with Progressive Enterprises Global.
           </p>
           <button
             onClick={onOpenInwardModal}

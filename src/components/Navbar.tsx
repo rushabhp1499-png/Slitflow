@@ -46,36 +46,20 @@ export const Navbar: React.FC<NavbarProps> = ({
     null;
 
   return (
-    <header className="sticky top-0 z-40 bg-slate-900 text-white border-b border-slate-800 shadow-md no-print">
+    <header className="sticky top-0 z-40 bg-slate-900 text-white border-b-2 border-blue-600 shadow-md no-print">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
-          
-          {/* Brand Logo & Name (Helvetica, font-normal) */}
-          <div className="flex items-center gap-3.5">
-            <div className="h-11 w-20 sm:w-24 bg-white rounded-xl p-1.5 flex items-center justify-center shadow-xs border border-slate-700/80 shrink-0">
-              <img
-                src="/pe-logo.svg"
-                alt="Progressive Enterprises Logo"
-                className="h-full w-full object-contain"
-              />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span
-                  style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
-                  className="font-normal text-lg sm:text-xl tracking-normal text-white select-none"
-                >
-                  Progressive Enterprises
-                </span>
-                <span className="hidden sm:inline-block text-[10px] uppercase font-medium tracking-wider bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded">
-                  Precision Slitting Works
-                </span>
+
+          {/* Brand lockup: strips mark straight on charcoal, "Progressive" bold + "Enterprises Global" regular */}
+          <div className="flex items-center gap-3 min-w-0">
+            <img src="/pe-logo.svg" alt="Progressive Enterprises Global" className="h-8 sm:h-9 w-auto shrink-0" />
+            <div className="min-w-0 leading-tight select-none">
+              <div className="text-base sm:text-lg text-white truncate">
+                <span className="font-bold">Progressive</span> <span className="font-normal">Enterprises Global</span>
               </div>
-              <p
-                style={{ fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}
-                className="text-[11px] text-slate-400 font-normal hidden md:block"
-              >
-                Industrial Slitting, Packaging & Customer Live Delivery Tracker
+              <p className="text-[11px] text-slate-400 hidden sm:block">
+                Materials. Converted for Purpose.
+                <span className="text-blue-400"> • {activeRole === 'customer' ? 'Customer Portal' : 'Factory Portal'}</span>
               </p>
             </div>
           </div>
@@ -90,7 +74,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
                   <div className="flex flex-col">
                     <span className="font-bold text-slate-200 flex items-center gap-1 text-[11px]">
-                      <Factory className="w-3 h-3 text-amber-400" />
+                      <Factory className="w-3 h-3 text-blue-400" />
                       <span>{staffName && staffName !== signedInEmail ? staffName : roleLabel}</span>
                     </span>
                     <span className="font-mono text-[10px] text-slate-400">
