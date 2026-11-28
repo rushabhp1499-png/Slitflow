@@ -6,6 +6,11 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const isSupabaseConfigured =
   !!url && !!anonKey && !url.includes('your-project-id') && !anonKey.includes('your-anon');
 
+// Read before the client clears the link: an invite or reset email link means
+// "choose your password" comes first.
+export const openedFromPasswordLink =
+  typeof window !== 'undefined' && /type=(invite|recovery)/.test(window.location.hash);
+
 // Null when the .env file is missing; App shows a setup message instead of crashing.
 export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(url!, anonKey!, {

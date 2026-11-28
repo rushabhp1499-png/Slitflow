@@ -1,6 +1,6 @@
 // Login management for the owner and developer logins (Users screen).
-// Creates logins with a password the admin chooses, sets new passwords and
-// removes logins. Runs on Supabase with the service role key, which never
+// Sends invite emails (the person sets their own password), creates logins
+// with a password the admin chooses, sets new passwords and removes logins. Runs on Supabase with the service role key, which never
 // reaches the website. Deploy: supabase functions deploy admin-users
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
@@ -14,6 +14,8 @@ const reply = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
 
 const MIN_PASSWORD = 8;
+// Where the invite and reset links land.
+const SITE = 'https://portal.peglobal.in';
 
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -50,6 +52,13 @@ Deno.serve(async req => {
     return data.users;
   };
   const findUser = async () => (await allUsers()).find(u => (u.email || '').toLowerCase() === email);
+  const hasAccess = async () => {
+    const [{ data: staff }, { data: cust }] = await Promise.all([
+      admin.from('staff_emails').select('email').eq('email', email).maybeSingle(),
+      admin.from('customers').select('id').contains('authorized_emails', [email]).limit(1),
+    ]);
+    return !!staff || !!(cust && cust.length);
+  };
 
   try {
     switch (body.action) {
@@ -64,17 +73,31 @@ Deno.serve(async req => {
         });
       }
 
+      case 'invite': {
+        // The person gets an email and chooses their own password; nobody else knows it.
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return reply(400, { error: 'Enter a valid email address.' });
+        if (!(await hasAccess())) {
+          return reply(400, { error: 'Add this email to a customer or as a factory login first.' });
+        }
+        const redirectTo = SITE;
+        if (await findUser()) {
+          // Already has a login: send a "set your password" (reset) email instead.
+          const { error } = await admin.auth.resetPasswordForEmail(email, { redirectTo });
+          if (error) throw error;
+          return reply(200, { ok: true, sent: 'reset' });
+        }
+        const { error } = await admin.auth.admin.inviteUserByEmail(email, { redirectTo });
+        if (error) throw error;
+        return reply(200, { ok: true, sent: 'invite' });
+      }
+
       case 'create': {
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return reply(400, { error: 'Enter a valid email address.' });
         if (password.length < MIN_PASSWORD) {
           return reply(400, { error: `The password must be at least ${MIN_PASSWORD} characters.` });
         }
         // A login only for an email the factory has already given access to.
-        const [{ data: staff }, { data: cust }] = await Promise.all([
-          admin.from('staff_emails').select('email').eq('email', email).maybeSingle(),
-          admin.from('customers').select('id').contains('authorized_emails', [email]).limit(1),
-        ]);
-        if (!staff && !(cust && cust.length)) {
+        if (!(await hasAccess())) {
           return reply(400, { error: 'Add this email to a customer or as a factory login first.' });
         }
         if (await findUser()) {

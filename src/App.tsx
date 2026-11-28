@@ -108,8 +108,11 @@ function PasswordResetScreen() {
       <form onSubmit={handleSubmit} className="w-full max-w-sm bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-4">
         <div className="flex items-center gap-2 text-slate-900 font-bold">
           <KeyRound className="w-5 h-5 text-blue-600" />
-          <span>Choose a new password</span>
+          <span>Choose your password</span>
         </div>
+        <p className="text-xs text-slate-500 -mt-2">
+          Only you will know it. Use it with your email to log in to the PE Global portal.
+        </p>
         {error && <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2.5">{error}</p>}
         <input
           type="password"
@@ -133,7 +136,7 @@ function PasswordResetScreen() {
           disabled={busy}
           className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold"
         >
-          {busy ? 'Saving...' : 'Save new password'}
+          {busy ? 'Saving...' : 'Save password and open portal'}
         </button>
       </form>
     </div>

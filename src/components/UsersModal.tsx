@@ -66,21 +66,29 @@ export const UsersModal: React.FC<UsersModalProps> = ({ onClose }) => {
     }, `Password saved for ${email}. Share it with them privately.`);
   };
 
+  // Emails the person a link to choose their own password (works for new and existing logins).
+  const sendInvite = (email: string) =>
+    run(async () => {
+      const r = await manageLogins('invite', email);
+      return r.success ? null : r.message;
+    }, `Email sent to ${email}. They click the link and choose their own password.`);
+
   const addStaff = (e: React.FormEvent) => {
     e.preventDefault();
     const email = newStaff.email.trim().toLowerCase();
+    const pw = newStaff.password;
     void run(async () => {
       const { error } = await getSupabase()
         .from('staff_emails')
         .insert({ email, staff_role: newStaff.role, display_name: newStaff.name.trim() || null });
       if (error) return errorMessage(error);
       if (!loginFor(email)) {
-        const r = await manageLogins('create', email, newStaff.password);
+        const r = pw ? await manageLogins('create', email, pw) : await manageLogins('invite', email);
         if (!r.success) return `Added, but the login was not created: ${r.message}`;
       }
       setNewStaff({ name: '', email: '', role: 'manager', password: '' });
       return null;
-    }, `Factory login ready for ${email}.`);
+    }, pw ? `Factory login ready for ${email}.` : `Invite sent to ${email}. They choose their own password.`);
   };
 
   const changeRole = (email: string, role: string) =>
@@ -105,18 +113,18 @@ export const UsersModal: React.FC<UsersModalProps> = ({ onClose }) => {
     if (!newClient.customerId) return setMessage('Choose the customer first.');
     addAuthorizedEmail(newClient.customerId, email);
     void run(async () => {
-      // Wait for the email to reach the database before creating the login.
+      // Wait for the email to reach the database before sending the invite.
       for (let i = 0; i < 10; i++) {
         await new Promise(r => setTimeout(r, 500));
-        const r = await manageLogins('create', email, newClient.password);
+        const r = await manageLogins('invite', email);
         if (r.success) {
           setNewClient({ customerId: '', email: '', password: '' });
           return null;
         }
         if (!/first/.test(r.message)) return r.message;
       }
-      return 'The email was added, but the login could not be created yet. Try "Set password" in a moment.';
-    }, `Customer login ready for ${email}. Share the password with them privately.`);
+      return 'The email was added, but the invite could not be sent yet. Click "Send invite" in a moment.';
+    }, `Invite sent to ${email}. They click the link in the email and choose their own password.`);
   };
 
   const removeClient = (customerId: string, email: string) => {
@@ -173,8 +181,11 @@ export const UsersModal: React.FC<UsersModalProps> = ({ onClose }) => {
                         </option>
                       ))}
                     </select>
-                    <button disabled={busy} onClick={() => askPassword(s.email)} className="px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold">
-                      {loginFor(s.email) ? 'Set password' : 'Create login'}
+                    <button disabled={busy} onClick={() => void sendInvite(s.email)} className="px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold">
+                      {loginFor(s.email)?.lastSignInAt ? 'Email password link' : 'Send invite'}
+                    </button>
+                    <button disabled={busy} onClick={() => askPassword(s.email)} className="px-2 py-2 text-slate-500 underline text-[11px]">
+                      Set password myself
                     </button>
                     <button disabled={busy} onClick={() => removeStaff(s.email)} className="p-2 text-red-700 border border-red-200 rounded-lg" title="Remove">
                       <Trash2 className="w-4 h-4" />
@@ -193,7 +204,7 @@ export const UsersModal: React.FC<UsersModalProps> = ({ onClose }) => {
                   </option>
                 ))}
               </select>
-              <input required minLength={8} placeholder="Password (8+)" value={newStaff.password} onChange={e => setNewStaff({ ...newStaff, password: e.target.value })} className={input} />
+              <input minLength={8} placeholder="Password (blank = email invite)" value={newStaff.password} onChange={e => setNewStaff({ ...newStaff, password: e.target.value })} className={input} />
               <button disabled={busy} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1">
                 <UserPlus className="w-4 h-4" /> Add
               </button>
@@ -212,9 +223,12 @@ export const UsersModal: React.FC<UsersModalProps> = ({ onClose }) => {
                       <div className="text-xs text-slate-500">{email}</div>
                       {loginBadge(email)}
                     </div>
-                    <div className="flex gap-2">
-                      <button disabled={busy} onClick={() => askPassword(email)} className="px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold">
-                        {loginFor(email) ? 'Set password' : 'Create login'}
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <button disabled={busy} onClick={() => void sendInvite(email)} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold">
+                        {loginFor(email)?.lastSignInAt ? 'Email password link' : 'Send invite'}
+                      </button>
+                      <button disabled={busy} onClick={() => askPassword(email)} className="px-2 py-2 text-slate-500 underline text-[11px]">
+                        Set password myself
                       </button>
                       <button disabled={busy} onClick={() => removeClient(c.id, email)} className="p-2 text-red-700 border border-red-200 rounded-lg" title="Remove access">
                         <Trash2 className="w-4 h-4" />
@@ -224,7 +238,7 @@ export const UsersModal: React.FC<UsersModalProps> = ({ onClose }) => {
                 ))
               )}
             </div>
-            <form onSubmit={addClient} className="mt-3 grid grid-cols-1 sm:grid-cols-4 gap-2">
+            <form onSubmit={addClient} className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
               <select required value={newClient.customerId} onChange={e => setNewClient({ ...newClient, customerId: e.target.value })} className={input}>
                 <option value="">Customer…</option>
                 {customers.map(c => (
@@ -234,11 +248,13 @@ export const UsersModal: React.FC<UsersModalProps> = ({ onClose }) => {
                 ))}
               </select>
               <input required type="email" placeholder="Their email" value={newClient.email} onChange={e => setNewClient({ ...newClient, email: e.target.value })} className={input} />
-              <input required minLength={8} placeholder="Password (8+)" value={newClient.password} onChange={e => setNewClient({ ...newClient, password: e.target.value })} className={input} />
               <button disabled={busy} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1">
-                <UserPlus className="w-4 h-4" /> Give access
+                <UserPlus className="w-4 h-4" /> Give access & send invite
               </button>
             </form>
+            <p className="mt-1.5 text-[11px] text-slate-500">
+              They get an email with a link and choose their own password. Nobody else sees it.
+            </p>
           </section>
         </div>
       </div>

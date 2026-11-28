@@ -27,7 +27,7 @@ import {
   INITIAL_CUSTOMERS,
   INITIAL_FACTORY_USERS,
 } from '../data/mockData';
-import { supabase, getSupabase, errorMessage } from '../lib/supabase';
+import { supabase, getSupabase, errorMessage, openedFromPasswordLink } from '../lib/supabase';
 import { TableSync, SyncedRow } from '../lib/tableSync';
 import { isMachineLocked, machineQueue, planOrder, rollsMade, rollsOnChallans, rollSpecLabel } from '../utils/floorPlan';
 import { thicknessText } from '../utils/material';
@@ -151,7 +151,7 @@ interface ProductionContextType {
   deleteOrder: (jobId: string) => Promise<AuthResult>;
   deleteCustomer: (customerId: string) => Promise<AuthResult>;
   manageLogins: (
-    action: 'list' | 'create' | 'set_password' | 'delete',
+    action: 'list' | 'invite' | 'create' | 'set_password' | 'delete',
     email?: string,
     password?: string
   ) => Promise<AuthResult & { users?: LoginInfo[] }>;
@@ -393,7 +393,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [account, setAccount] = useState<Account | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [localImport, setLocalImport] = useState<LocalImportSummary | null>(null);
-  const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const [passwordRecovery, setPasswordRecovery] = useState(openedFromPasswordLink);
 
   const isFactoryAuthenticated = account?.role === 'staff';
   const [staffRole, setStaffRole] = useState<ProductionContextType['staffRole']>(null);
