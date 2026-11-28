@@ -179,9 +179,12 @@ export const UsersModal: React.FC<UsersModalProps> = ({ onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden border border-slate-200 my-6">
-        <div className="bg-slate-900 text-white px-5 py-4 flex items-center justify-between">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-950/70 backdrop-blur-xs"
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-200">
+        <div className="bg-slate-900 text-white px-5 py-4 flex items-center justify-between shrink-0">
           <h2 className="text-base font-bold flex items-center gap-2">
             <KeyRound className="w-4 h-4" /> Users & Logins
           </h2>
@@ -190,7 +193,7 @@ export const UsersModal: React.FC<UsersModalProps> = ({ onClose }) => {
           </button>
         </div>
 
-        <div className="p-5 space-y-6 text-sm">
+        <div className="p-5 space-y-6 text-sm overflow-y-auto">
           {message && <p className="text-xs font-semibold bg-slate-100 border border-slate-200 rounded-lg p-2">{message}</p>}
 
           <section>
