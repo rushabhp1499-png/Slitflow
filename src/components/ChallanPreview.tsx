@@ -29,12 +29,15 @@ export const ChallanPreview: React.FC<{ challan: DeliveryChallan; job: MaterialI
   return (
     <div className="bg-white border border-slate-300 rounded-2xl p-4 sm:p-6 shadow-sm text-slate-900 text-xs space-y-3">
       <div className="flex flex-col sm:flex-row justify-between gap-3 border-b-2 border-slate-900 pb-3">
-        <div>
-          <h2 className="text-lg font-black">{COMPANY.name}</h2>
-          <p className="text-[11px] text-slate-600">{COMPANY.address}</p>
-          <p className="text-[11px] text-slate-600">{companyContactLine()}</p>
+        <div className="flex items-start gap-3 min-w-0">
+          <img src="/pe-logo.svg" alt="PE Global" className="w-14 shrink-0 mt-1" />
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-lg font-black leading-tight">{COMPANY.name}</h2>
+            <p className="text-[11px] text-slate-600">{COMPANY.address}</p>
+            <p className="text-[11px] text-slate-600">{companyContactLine()}</p>
+          </div>
         </div>
-        <div className="sm:text-right">
+        <div className="sm:text-right shrink-0">
           <p className="font-black text-sm">DELIVERY CHALLAN</p>
           <p className="text-[10px] text-slate-500">Job work – Rule 55, CGST Rules 2017</p>
           <p className="font-mono font-bold text-sm mt-1">{challan.challanNo}</p>

@@ -32,7 +32,25 @@ export const sizeSummary = (bundles: BundleRecord[]) => {
   return Array.from(byWidth.values());
 };
 
-const bundleTare = (b: BundleRecord) => (b.paperCoreTareWeightKg || 0) + (b.otherPackagingTareKg || 0);
+// The PE Global mark (three orange strips with the curled end), drawn as vectors so it prints sharp.
+// Same shape as public/pe-logo.svg; each strip sits 24 units left and 36 units below the one above.
+const STRIP: number[][] = [
+  [92, 0],
+  [28, 0, 40, -4.55, 46, -13],
+  [6, -14],
+  [-8, 3.1, -22, 7, -40, 7],
+  [-92, 0],
+  [-12, 20],
+];
+function drawLogoMark(doc: jsPDF, x: number, top: number, width: number) {
+  const s = width / 192; // the mark is 192 units wide
+  doc.setFillColor(243, 100, 34);
+  for (let i = 0; i < 3; i++) {
+    doc.lines(STRIP, x + (48 - 24 * i) * s, top + (34 + 36 * i - 7) * s, [s, s], 'F', true);
+  }
+}
+
+const bundleTare =(b: BundleRecord) => (b.paperCoreTareWeightKg || 0) + (b.otherPackagingTareKg || 0);
 
 // Builds the delivery challan as one A4 page (also for 40-50 bundles).
 // Only recorded data is printed: weighed bundles, entered vehicle / e-way bill numbers.
@@ -43,16 +61,21 @@ export function buildChallanPdf(challan: DeliveryChallan, job: MaterialInward): 
   const lastY = () => (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
   let y = 14;
 
-  // Letterhead
+  // Letterhead: logo, then the name sized to stop short of the "DELIVERY CHALLAN" block.
+  drawLogoMark(doc, margin, y - 4.5, 18);
+  const nameX = margin + 21;
+  const nameRoom = pageW - margin - 50 - nameX;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
-  doc.text(COMPANY.name, margin, y);
+  let nameSize = 14;
+  doc.setFontSize(nameSize);
+  while (doc.getTextWidth(COMPANY.name) > nameRoom && nameSize > 8) doc.setFontSize((nameSize -= 0.5));
+  doc.text(COMPANY.name, nameX, y);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(70);
-  const addressLines = doc.splitTextToSize(COMPANY.address, 112);
-  doc.text(addressLines, margin, y + 4.5);
-  doc.text(companyContactLine(), margin, y + 4.5 + addressLines.length * 3.6);
+  const addressLines = doc.splitTextToSize(COMPANY.address, nameRoom);
+  doc.text(addressLines, nameX, y + 4.5);
+  doc.text(doc.splitTextToSize(companyContactLine(), nameRoom), nameX, y + 4.5 + addressLines.length * 3.6);
 
   doc.setTextColor(20);
   doc.setFont('helvetica', 'bold');
