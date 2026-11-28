@@ -6,7 +6,8 @@ import { companyContactLine } from '../config/company';
 import { downloadChallanPdf, printChallanPdf } from '../utils/challanExport';
 import { ChallanPreview } from './ChallanPreview';
 import { InvoiceCell } from './InvoiceCell';
-import { tracksWeight } from '../utils/floorPlan';
+import { isRollOrder, tracksWeight } from '../utils/floorPlan';
+import { RollChallanForm } from './RollChallanForm';
 import { gradeText } from '../utils/material';
 import { WhatsAppDispatchModal } from './WhatsAppDispatchModal';
 import { EmailDispatchModal } from './EmailDispatchModal';
@@ -585,6 +586,16 @@ ${companyContactLine()}`;
                 </div>
               )}
             </div>
+          ) : isCreatingNew && !isPermanentlyClosed && isRollOrder(job) ? (
+            <RollChallanForm
+              job={job}
+              showCancel={existingChallans.length > 0}
+              onCancel={() => setIsCreatingNew(false)}
+              onCreated={(id) => {
+                setActiveChallanId(id);
+                setIsCreatingNew(false);
+              }}
+            />
           ) : isCreatingNew && !isPermanentlyClosed ? (
             <div className="max-w-3xl mx-auto bg-white border border-slate-200 rounded-2xl p-5 sm:p-7 shadow-xs">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200 mb-5">
@@ -1027,8 +1038,8 @@ ${companyContactLine()}`;
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
-                  {/* Edit Challan button - Locked if PO is Permanently Closed */}
-                  {!isPermanentlyClosed && (
+                  {/* Edit Challan button - Locked if PO is Permanently Closed. Roll challans are deleted and remade instead. */}
+                  {!isPermanentlyClosed && !activeChallan.rollLines && (
                     isEditingExisting ? (
                       <button
                         type="button"

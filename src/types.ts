@@ -78,6 +78,33 @@ export interface JobAssignment {
   assignedBy: string;
 }
 
+// Roll-length orders (e.g. exporters): rolls of a fixed length are made from the material, their weight may vary.
+export interface RollSpec {
+  id: string;
+  lengthM: number;
+  widthMm?: number; // blank = full-width rewind
+  targetRolls?: number; // blank = as many as the material gives
+}
+
+// Rolls made, logged whenever convenient (daily, or once at the end).
+export interface RollEntry {
+  id: string;
+  date: string; // YYYY-MM-DD
+  specId: string;
+  rolls: number;
+  note?: string;
+  at: string;
+  by: string;
+}
+
+// Rolls of one length on a challan.
+export interface ChallanRollLine {
+  specId: string;
+  lengthM: number;
+  widthMm?: number;
+  rolls: number;
+}
+
 // A slit width the customer wants and how much of it, in kg (50 g least count).
 export interface RequestedSlitSize {
   id: string;
@@ -226,6 +253,8 @@ export interface DeliveryChallan {
   remainingBalanceWeightKg: number; // e.g. 752 kg remaining in factory
   // Keeps-stock customer: bills what was slit; the bundles may stay stored with us until lifted.
   billedOnly?: boolean;
+  // Roll-length orders: the rolls on this challan (no bundles); weight is optional
+  rollLines?: ChallanRollLine[];
   // Tally invoice this challan was billed on (one invoice may cover several challans)
   invoiceNo?: string;
   invoicedAt?: string;
@@ -336,6 +365,13 @@ export interface MaterialInward {
   
   customerInstructions: string; // special customer instructions (e.g., slit to 20mm, bundles 25-30kg max, 10 reels/20 reams per bundle)
   requestedSlitSizes?: RequestedSlitSize[]; // slit widths and kg the customer asked for at inward entry
+
+  // How the order is measured: by weight (slit sizes in kg, weighed bundles; the default)
+  // or by roll length (rolls of a fixed length, counted, weight optional)
+  orderType?: 'weight' | 'rolls';
+  coreSize?: string; // roll-length orders, e.g. '2"'
+  rollSpecs?: RollSpec[];
+  rollEntries?: RollEntry[];
 
   // Production Tracking
   status: ProductionStatus;

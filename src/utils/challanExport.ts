@@ -117,6 +117,18 @@ export function buildChallanPdf(challan: DeliveryChallan, job: MaterialInward): 
     s.rolls ? String(s.rolls) : '—',
     kg(s.netKg),
   ]);
+  // Roll-length orders: rolls counted per length, weight only if it was entered.
+  const rollLines = challan.rollLines || [];
+  const rollTotal = rollLines.reduce((s, l) => s + l.rolls, 0);
+  rollLines.forEach((l) =>
+    goodsRows.push([
+      String(goodsRows.length + 1),
+      `${gradeText(job)} rolls – ${l.lengthM} m${l.widthMm ? ` × ${l.widthMm} mm` : ''}${job.coreSize ? `, ${job.coreSize} core` : ''}`,
+      '—',
+      String(l.rolls),
+      '—',
+    ])
+  );
   if (returned) {
     goodsRows.push([
       String(goodsRows.length + 1),
@@ -138,9 +150,16 @@ export function buildChallanPdf(challan: DeliveryChallan, job: MaterialInward): 
       [
         '',
         'Total',
-        String(bundles.length),
-        '',
-        { content: kg(slitNet + (returned?.weightKg || 0)), styles: { halign: 'right' } },
+        rollLines.length ? '—' : String(bundles.length),
+        { content: rollLines.length ? String(rollTotal) : '', styles: { halign: 'right' } },
+        {
+          content: rollLines.length
+            ? challan.thisDispatchWeightKg > 0
+              ? kg(challan.thisDispatchWeightKg)
+              : '—'
+            : kg(slitNet + (returned?.weightKg || 0)),
+          styles: { halign: 'right' },
+        },
       ],
     ],
     footStyles: { fillColor: [247, 244, 238], textColor: 20, fontStyle: 'bold' },
@@ -205,8 +224,21 @@ export function buildChallanPdf(challan: DeliveryChallan, job: MaterialInward): 
     margin: { left: margin, right: margin },
     theme: 'plain',
     styles: { fontSize: 8, cellPadding: 1.2, fontStyle: 'bold' },
-    body:
-      challan.totalOrderWeightKg > 0 && !challan.billedOnly
+    body: rollLines.length
+      ? [
+          [
+            [
+              `This challan: ${rollTotal} rolls${challan.thisDispatchWeightKg > 0 ? `  •  ${kg(challan.thisDispatchWeightKg)} kg` : ''}`,
+              job.incomingWeight > 0 ? `Material received: ${kg(job.incomingWeight)} kg (${job.coilsOrRollsCount} reels)` : '',
+            ]
+              .filter(Boolean)
+              .join('     '),
+          ],
+          ...(challan.billedOnly
+            ? [["Billed on this challan. At the customer's request the rolls may stay stored at our premises until collected."]]
+            : []),
+        ]
+      : challan.totalOrderWeightKg > 0 && !challan.billedOnly
         ? [
             [
               `Material received: ${kg(challan.totalOrderWeightKg)} kg`,

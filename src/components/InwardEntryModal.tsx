@@ -80,6 +80,23 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
   const [lotDetails, setLotDetails] = useState<string>('');
   const [coilsOrRollsCount, setCoilsOrRollsCount] = useState<string>('1');
 
+  // How the order is measured: kg per slit size (default) or rolls of a fixed length (e.g. exporters)
+  const [orderType, setOrderType] = useState<'weight' | 'rolls'>('weight');
+  const [coreSize, setCoreSize] = useState<string>('2"');
+  type RollRow = { id: string; lengthM: string; widthMm: string; target: string };
+  const newRollRow = (): RollRow => ({ id: `rs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`, lengthM: '', widthMm: '', target: '' });
+  const [rollRows, setRollRows] = useState<RollRow[]>([newRollRow()]);
+  const updateRollRow = (id: string, field: keyof Omit<RollRow, 'id'>, value: string) =>
+    setRollRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
+  const validRollSpecs = rollRows
+    .filter((r) => Number(r.lengthM) > 0)
+    .map((r) => ({
+      id: r.id,
+      lengthM: Number(r.lengthM),
+      ...(Number(r.widthMm) > 0 ? { widthMm: Number(r.widthMm) } : {}),
+      ...(Number(r.target) > 0 ? { targetRolls: Math.round(Number(r.target)) } : {}),
+    }));
+
   // Slitting sizes requested by the customer
   const [slitRows, setSlitRows] = useState<SlitRow[]>([newSlitRow()]);
   const [extraInstructions, setExtraInstructions] = useState<string>('');
@@ -121,18 +138,31 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
       }
     }
 
-    if (validSizes.length === 0) {
-      setFormError('Add at least one slitting size (width in mm and quantity in kg).');
-      return;
-    }
-    if (weightNum > 0 && totalSlitKg > weightNum) {
-      setFormError(`The slitting quantities add up to ${formatKg(totalSlitKg)} kg, which is more than the incoming weight of ${formatKg(weightNum)} kg.`);
-      return;
+    const byRolls = orderType === 'rolls';
+    if (byRolls) {
+      if (validRollSpecs.length === 0) {
+        setFormError('Add at least one roll length (metres per roll).');
+        return;
+      }
+    } else {
+      if (validSizes.length === 0) {
+        setFormError('Add at least one slitting size (width in mm and quantity in kg).');
+        return;
+      }
+      if (weightNum > 0 && totalSlitKg > weightNum) {
+        setFormError(`The slitting quantities add up to ${formatKg(totalSlitKg)} kg, which is more than the incoming weight of ${formatKg(weightNum)} kg.`);
+        return;
+      }
     }
 
+    const rollSummary = validRollSpecs
+      .map((s) => `${s.lengthM} m${s.widthMm ? ` × ${s.widthMm} mm` : ''}${s.targetRolls ? ` (${s.targetRolls} rolls)` : ''}`)
+      .join(', ');
     const instructions = [
-      `Slit sizes: ${slitSummary}.`,
-      balanceKg > 0 ? `Balance ${formatKg(balanceKg)} kg not assigned to a size.` : '',
+      byRolls
+        ? `Rolls of ${rollSummary}${coreSize.trim() ? ` on ${coreSize.trim()} core` : ''}.`
+        : `Slit sizes: ${slitSummary}.`,
+      !byRolls && balanceKg > 0 ? `Balance ${formatKg(balanceKg)} kg not assigned to a size.` : '',
       extraInstructions.trim(),
     ]
       .filter(Boolean)
@@ -153,7 +183,8 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
       incomingLength: Number(incomingLength) || 0,
       incomingWeight: weightNum,
       coilsOrRollsCount: Number(coilsOrRollsCount) || 1,
-      requestedSlitSizes: validSizes,
+      ...(byRolls ? { orderType: 'rolls' as const, coreSize: coreSize.trim(), rollSpecs: validRollSpecs } : {}),
+      requestedSlitSizes: byRolls ? [] : validSizes,
       customerInstructions: instructions,
       bundleSpecs: {
         targetBundleWeightKg: toScaleKg(Number(targetBundleWeightKg)) || 28,
@@ -398,15 +429,71 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
 
           {/* Section 3: Slitting Sizes */}
           <div className="border-t border-slate-200 pt-4">
-            <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-              <Scissors className="w-4 h-4 text-blue-600" />
-              3. Slitting Sizes Required
-            </h4>
-            <p className="text-[11px] text-slate-500 mb-3">
-              Add each width you need and how many kg of that width (in steps of 50 g).
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                <Scissors className="w-4 h-4 text-blue-600" />
+                3. What to make
+              </h4>
+              {/* Weight orders: kg per slit size. Roll-length orders: rolls of a fixed length, counted. */}
+              <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden text-[11px] font-bold">
+                {(['weight', 'rolls'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setOrderType(t)}
+                    className={`px-3 py-1.5 ${orderType === t ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    {t === 'weight' ? 'By weight (kg)' : 'By roll length'}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-            <SlitSizesEditor rows={slitRows} onChange={setSlitRows} availableKg={weightNum} />
+            {orderType === 'rolls' ? (
+              <div className="space-y-2">
+                <p className="text-[11px] text-slate-500">
+                  Rolls of a fixed length; their weight can vary. Leave target blank for "as many as the material gives".
+                </p>
+                <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 text-[11px] font-semibold text-slate-600 px-0.5">
+                  <span>Length per roll (m) *</span>
+                  <span>Width (mm)</span>
+                  <span>Target rolls</span>
+                  <span className="w-8" />
+                </div>
+                {rollRows.map((r) => (
+                  <div key={r.id} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
+                    <input type="number" min={1} step="any" value={r.lengthM} onChange={(e) => updateRollRow(r.id, 'lengthM', e.target.value)} placeholder="e.g. 500" className={`${inputClass} font-bold`} />
+                    <input type="number" min={0} step="any" value={r.widthMm} onChange={(e) => updateRollRow(r.id, 'widthMm', e.target.value)} placeholder="Full width" className={inputClass} />
+                    <input type="number" min={0} value={r.target} onChange={(e) => updateRollRow(r.id, 'target', e.target.value)} placeholder="Any" className={inputClass} />
+                    <button
+                      type="button"
+                      onClick={() => setRollRows((prev) => (prev.length > 1 ? prev.filter((x) => x.id !== r.id) : prev))}
+                      disabled={rollRows.length === 1}
+                      className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-600 disabled:opacity-30"
+                      title="Remove this length"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <button type="button" onClick={() => setRollRows((prev) => [...prev, newRollRow()])} className="text-xs font-bold text-blue-700 hover:text-blue-900">
+                    + Add another length
+                  </button>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                    Core
+                    <input value={coreSize} onChange={(e) => setCoreSize(e.target.value)} placeholder='e.g. 2"' className="w-20 px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold" />
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="text-[11px] text-slate-500 mb-3">
+                  Add each width you need and how many kg of that width (in steps of 50 g).
+                </p>
+                <SlitSizesEditor rows={slitRows} onChange={setSlitRows} availableKg={weightNum} />
+              </>
+            )}
 
             <div className="mt-3">
               <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -422,7 +509,8 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
             </div>
           </div>
 
-          {/* Section 4: Packaging & Bundle Specifications */}
+          {/* Section 4: Packaging & Bundle Specifications (weight orders only) */}
+          {orderType === 'weight' && (
           <div className="border-t border-slate-200 pt-4 bg-purple-50/40 p-4 rounded-xl border border-purple-200">
             <h4 className="text-xs font-bold text-purple-950 uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <PackageCheck className="w-4 h-4 text-purple-700" />
@@ -492,6 +580,7 @@ export const InwardEntryModal: React.FC<InwardEntryModalProps> = ({
               />
             </div>
           </div>
+          )}
 
           {formError && (
             <div className="flex items-start gap-2 text-xs text-red-900 bg-red-50 border border-red-200 p-3 rounded-lg">

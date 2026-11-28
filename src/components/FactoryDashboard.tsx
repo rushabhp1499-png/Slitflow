@@ -4,7 +4,7 @@ import { MaterialInward, ProductionStatus } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { SIZE_MASTER_URL, sizeMasterLink } from '../utils/sizeMaster';
 import { exportJobsToExcel } from '../utils/excelExport';
-import { hasMaterialLeft, isMachineLocked, machineQueue, orderTargetKg, packedKg, tracksWeight } from '../utils/floorPlan';
+import { hasMaterialLeft, isMachineLocked, isRollOrder, machineQueue, orderProgress, rollsMade, tracksWeight } from '../utils/floorPlan';
 import { formatKg } from '../utils/weight';
 import { AnimatedNumber } from './AnimatedNumber';
 import {
@@ -797,9 +797,8 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                 </tr>
               ) : (
                 filteredJobs.map((job, rowIndex) => {
-                  const targetKg = orderTargetKg(job);
-                  const doneKg = packedKg(job);
-                  const donePct = targetKg > 0 ? Math.min(100, Math.round((doneKg / targetKg) * 100)) : 0;
+                  const progress = orderProgress(job);
+                  const donePct = progress.pct;
                   const stageStep =
                     job.status === 'received' || job.status === 'pending_production'
                       ? 0
@@ -892,7 +891,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                             {sizeText(job)}
                           </div>
                           <div className="text-xs font-bold text-blue-900 mt-0.5">
-                            {tracksWeight(job) ? `${job.incomingWeight.toLocaleString()} kg` : 'Weight not given'}{' '}
+                            {job.incomingWeight > 0 ? `${job.incomingWeight.toLocaleString()} kg` : 'Weight not given'}{' '}
                             <span className="font-normal text-slate-400 text-[10px]">
                               ({job.coilsOrRollsCount} coil{job.coilsOrRollsCount > 1 ? 's' : ''})
                             </span>
@@ -908,8 +907,8 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                             <div
                               className="mt-1.5 w-44 max-w-full"
                               role="img"
-                              aria-label={`${formatKg(doneKg)} of ${formatKg(targetKg)} kg packed`}
-                              title={`${formatKg(doneKg)} of ${formatKg(targetKg)} kg packed`}
+                              aria-label={progress.label}
+                              title={progress.label}
                             >
                               <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
                                 <div
@@ -920,7 +919,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                                 />
                               </div>
                               <div className="text-[10px] text-slate-500 mt-0.5 font-mono">
-                                {donePct}% packed
+                                {isRollOrder(job) ? progress.label : `${donePct}% packed`}
                               </div>
                             </div>
                           )}
@@ -1087,7 +1086,11 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                                 title="Add bundle weights, core tube tare deduction, and roll size specifications"
                               >
                                 <Package className="w-3.5 h-3.5 text-blue-600" />
-                                <span>Add Bundle Details ({job.bundles?.length || 0})</span>
+                                <span>
+                                  {isRollOrder(job)
+                                    ? `Record Rolls (${rollsMade(job)})`
+                                    : `Add Bundle Details (${job.bundles?.length || 0})`}
+                                </span>
                               </button>
                               <a
                                 href={sizeMasterLink(job, machines, floorStaff)}
@@ -1324,7 +1327,9 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                                 <div className="flex items-center justify-between">
                                   <h4 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
                                     <Scale className="w-3.5 h-3.5 text-blue-600" />
-                                    Floor Scale Bundle Ledger ({job.bundles?.length || 0} Bundles Logged)
+                                    {isRollOrder(job)
+                                      ? `Rolls made: ${progress.label}`
+                                      : `Floor Scale Bundle Ledger (${job.bundles?.length || 0} Bundles Logged)`}
                                   </h4>
                                   {!isPermanentlyClosed && (
                                     <button
@@ -1333,12 +1338,20 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                                       className="text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2.5 py-1 rounded transition flex items-center gap-1"
                                     >
                                       <Plus className="w-3 h-3" />
-                                      Open Weighing Dialog
+                                      {isRollOrder(job) ? 'Record Rolls' : 'Open Weighing Dialog'}
                                     </button>
                                   )}
                                 </div>
 
-                                {job.bundles && job.bundles.length > 0 ? (
+                                {isRollOrder(job) ? (
+                                  <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded border border-slate-200">
+                                    Roll-length order{job.coreSize ? ` on ${job.coreSize} core` : ''}:{' '}
+                                    {(job.rollSpecs || [])
+                                      .map((s) => `${rollsMade(job, s.id)} × ${s.lengthM} m${s.widthMm ? ` × ${s.widthMm} mm` : ''}`)
+                                      .join(', ')}
+                                    . Rolls are counted, not weighed.
+                                  </p>
+                                ) : job.bundles && job.bundles.length > 0 ? (
                                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                     {job.bundles.slice(0, 6).map((b) => (
                                       <div

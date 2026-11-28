@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useProduction } from '../context/ProductionContext';
 import { MaterialInward } from '../types';
 import { formatKg } from '../utils/weight';
-import { isMachineLocked, isOpenOrder, machineQueue, orderTargetKg, packedKg, pendingKg } from '../utils/floorPlan';
+import { isMachineLocked, isOpenOrder, isRollOrder, machineQueue, orderProgress, orderTargetKg, packedKg, pendingKg } from '../utils/floorPlan';
 import { gradeText, sizeText } from '../utils/material';
 import { Maximize, ArrowLeft, PanelLeftClose, PanelLeftOpen, Search, X, GripVertical, Lock } from 'lucide-react';
 
@@ -281,9 +281,13 @@ export const LiveFloor: React.FC = () => {
                         </div>
                         <div className="flex items-center justify-between gap-2 text-[11px] mt-0.5">
                           <span className="text-slate-400 truncate">
-                            {j.requestedSlitSizes?.length ? j.requestedSlitSizes.map((s) => s.widthMm).join(', ') + ' mm' : 'Sizes not set'}
+                            {isRollOrder(j)
+                              ? (j.rollSpecs || []).map((s) => `${s.lengthM} m`).join(', ') + ' rolls'
+                              : j.requestedSlitSizes?.length
+                              ? j.requestedSlitSizes.map((s) => s.widthMm).join(', ') + ' mm'
+                              : 'Sizes not set'}
                           </span>
-                          <span className="font-mono font-bold text-white shrink-0">{formatKg(pendingKg(j))} kg</span>
+                          <span className="font-mono font-bold text-white shrink-0">{orderProgress(j).left}</span>
                         </div>
                       </div>
                     );
@@ -302,7 +306,8 @@ export const LiveFloor: React.FC = () => {
               const bundles = (job?.bundles || []).filter((b) => !b.isVoided);
               const doneKg = job ? packedKg(job) : 0;
               const targetKg = job ? orderTargetKg(job) : 0;
-              const pct = targetKg > 0 ? Math.min(100, Math.round((doneKg / targetKg) * 100)) : 0;
+              const progress = job ? orderProgress(job) : null;
+              const pct = progress?.pct || 0;
               const lastBundle = [...bundles].sort((a, b) => b.weighedAt.localeCompare(a.weighedAt))[0];
               const lastMins = lastBundle ? minutesAgo(lastBundle.weighedAt, now) : null;
               const edd = job?.estimatedDeliveryDate;
@@ -377,8 +382,14 @@ export const LiveFloor: React.FC = () => {
 
                       <div>
                         <div className="flex justify-between text-sm mb-1">
-                          <span className="font-black font-mono text-lg">{formatKg(doneKg)} kg</span>
-                          <span className="text-slate-400 font-mono">of {formatKg(targetKg)} kg • {pct}%</span>
+                          {isRollOrder(job) ? (
+                            <span className="font-black font-mono text-lg">{progress?.label}</span>
+                          ) : (
+                            <>
+                              <span className="font-black font-mono text-lg">{formatKg(doneKg)} kg</span>
+                              <span className="text-slate-400 font-mono">of {formatKg(targetKg)} kg • {pct}%</span>
+                            </>
+                          )}
                         </div>
                         <div className="h-3 bg-slate-800 rounded-full overflow-hidden">
                           <div className={`h-full ${running ? 'bg-emerald-500' : 'bg-amber-400'}`} style={{ width: `${pct}%` }} />
@@ -423,7 +434,7 @@ export const LiveFloor: React.FC = () => {
                           <span className="text-slate-500 w-4 shrink-0">{i + 2}.</span>
                           <span className="font-mono font-bold text-sky-300 shrink-0">{j.customerPoNo}</span>
                           <span className="text-slate-400 truncate flex-1">{j.customerName}</span>
-                          <span className="font-mono text-slate-300 shrink-0">{formatKg(pendingKg(j))} kg</span>
+                          <span className="font-mono text-slate-300 shrink-0">{orderProgress(j).left}</span>
                           {isMachineLocked(j) ? (
                             <span title={`Production has started, so this PO stays on ${m.number}`}>
                               <Lock className="w-3.5 h-3.5 text-slate-500 shrink-0" />

@@ -1,7 +1,27 @@
-import { MaterialInward } from '../types';
+import { MaterialInward, RollSpec } from '../types';
+
+// Roll-length orders: rolls of a fixed length are counted; their weight is not tracked.
+export const isRollOrder = (j: MaterialInward) => j.orderType === 'rolls';
+
+// "500 m", "500 m × 450 mm"
+export const rollSpecLabel = (s: Pick<RollSpec, 'lengthM' | 'widthMm'>) =>
+  `${s.lengthM} m${s.widthMm ? ` × ${s.widthMm} mm` : ''}`;
+
+export const rollsMade = (j: MaterialInward, specId?: string) =>
+  (j.rollEntries || []).filter((e) => !specId || e.specId === specId).reduce((s, e) => s + e.rolls, 0);
+
+export const rollsOnChallans = (j: MaterialInward, specId?: string) =>
+  (j.challans || [])
+    .filter((c) => !c.isSuperseded)
+    .flatMap((c) => c.rollLines || [])
+    .filter((l) => !specId || l.specId === specId)
+    .reduce((s, l) => s + l.rolls, 0);
+
+export const rollsTarget = (j: MaterialInward) => (j.rollSpecs || []).reduce((s, x) => s + (x.targetRolls || 0), 0);
 
 // Incoming weight is optional (e.g. mixed container lots): with none entered there is no balance to tally.
-export const tracksWeight = (j: MaterialInward) => (j.incomingWeight || 0) > 0;
+// Roll-length orders are counted in rolls, so their kg balance is never tallied either.
+export const tracksWeight = (j: MaterialInward) => (j.incomingWeight || 0) > 0 && !isRollOrder(j);
 
 // Material still to slit or send: by weight when it was entered, otherwise until the PO is dispatched or closed.
 export const hasMaterialLeft = (j: MaterialInward) =>
@@ -79,4 +99,25 @@ export const orderTargetKg = (j: MaterialInward) =>
 export const packedKg = (j: MaterialInward) =>
   (j.bundles || []).filter((b) => !b.isVoided).reduce((s, b) => s + b.netWeightKg, 0);
 
-export const pendingKg = (j: MaterialInward) => Math.max(0, orderTargetKg(j) - packedKg(j));
+export const pendingKg = (j: MaterialInward) => (isRollOrder(j) ? 0 : Math.max(0, orderTargetKg(j) - packedKg(j)));
+
+// Progress of an order for bars and labels: kg packed, or rolls made for roll-length orders.
+export const orderProgress = (j: MaterialInward) => {
+  if (isRollOrder(j)) {
+    const done = rollsMade(j);
+    const target = rollsTarget(j);
+    return {
+      pct: target > 0 ? Math.min(100, Math.round((done / target) * 100)) : 0,
+      label: target > 0 ? `${done} of ${target} rolls` : `${done} rolls made`,
+      left: target > 0 ? `${Math.max(0, target - done)} rolls` : `${done} rolls`,
+    };
+  }
+  const target = orderTargetKg(j);
+  const done = packedKg(j);
+  const fmt = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  return {
+    pct: target > 0 ? Math.min(100, Math.round((done / target) * 100)) : 0,
+    label: `${fmt(done)} of ${fmt(target)} kg packed`,
+    left: `${fmt(pendingKg(j))} kg`,
+  };
+};

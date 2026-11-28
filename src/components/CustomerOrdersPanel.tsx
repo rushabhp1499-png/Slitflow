@@ -133,7 +133,7 @@ export const CustomerOrdersPanel: React.FC<{ customer: Customer }> = ({ customer
                           {sizeText(j)}
                         </div>
                       </td>
-                      <td className="px-2 py-1.5 text-right font-mono">{tracksWeight(j) ? formatKg(j.incomingWeight) : '—'}</td>
+                      <td className="px-2 py-1.5 text-right font-mono">{j.incomingWeight > 0 ? formatKg(j.incomingWeight) : '—'}</td>
                       <td className="px-2 py-1.5 text-right font-mono text-emerald-700">{formatKg(j.dispatchedWeightKg || 0)}</td>
                       <td className="px-2 py-1.5 text-right font-mono font-bold">
                         {tracksWeight(j) && !customer.keepsStock ? formatKg(balance(j)) : '—'}

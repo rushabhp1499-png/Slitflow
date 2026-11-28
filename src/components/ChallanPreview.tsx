@@ -4,6 +4,7 @@ import { COMPANY, companyContactLine } from '../config/company';
 import { challanBundles, sizeSummary } from '../utils/challanExport';
 import { formatKg } from '../utils/weight';
 import { gradeText } from '../utils/material';
+import { rollSpecLabel } from '../utils/floorPlan';
 
 const orDash = (v?: string | null) => (v && v.trim() && v.trim() !== '—' ? v.trim() : '—');
 
@@ -15,6 +16,15 @@ export const ChallanPreview: React.FC<{ challan: DeliveryChallan; job: MaterialI
   const gross = bundles.reduce((s, b) => s + b.grossWeightKg, 0);
   const tare = bundles.reduce((s, b) => s + (b.paperCoreTareWeightKg || 0) + (b.otherPackagingTareKg || 0), 0);
   const sizes = sizeSummary(bundles);
+  // Roll-length orders: rolls counted per length, weight only if it was entered.
+  const rollLines = challan.rollLines || [];
+  const rollTotal = rollLines.reduce((s, l) => s + l.rolls, 0);
+  const core = job.coreSize ? `, ${job.coreSize} core` : '';
+  const weightText = rollLines.length
+    ? challan.thisDispatchWeightKg > 0
+      ? formatKg(challan.thisDispatchWeightKg)
+      : '—'
+    : formatKg(slitNet + (returned?.weightKg || 0));
 
   return (
     <div className="bg-white border border-slate-300 rounded-2xl p-4 sm:p-6 shadow-sm text-slate-900 text-xs space-y-3">
@@ -77,6 +87,18 @@ export const ChallanPreview: React.FC<{ challan: DeliveryChallan; job: MaterialI
               <td className="py-1.5 px-2 text-right font-mono font-bold">{formatKg(s.netKg)}</td>
             </tr>
           ))}
+          {rollLines.map((l, i) => (
+            <tr key={l.specId}>
+              <td className="py-1.5 px-2">{sizes.length + i + 1}</td>
+              <td className="py-1.5 px-2">
+                {gradeText(job)} rolls – {rollSpecLabel(l)}
+                {core}
+              </td>
+              <td className="py-1.5 px-2 text-right font-mono">—</td>
+              <td className="py-1.5 px-2 text-right font-mono font-bold">{l.rolls}</td>
+              <td className="py-1.5 px-2 text-right font-mono">—</td>
+            </tr>
+          ))}
           {returned && (
             <tr className="bg-amber-50">
               <td className="py-1.5 px-2">{sizes.length + 1}</td>
@@ -93,9 +115,9 @@ export const ChallanPreview: React.FC<{ challan: DeliveryChallan; job: MaterialI
           <tr>
             <td />
             <td className="py-1.5 px-2">Total</td>
-            <td className="py-1.5 px-2 text-right font-mono">{bundles.length}</td>
-            <td />
-            <td className="py-1.5 px-2 text-right font-mono">{formatKg(slitNet + (returned?.weightKg || 0))}</td>
+            <td className="py-1.5 px-2 text-right font-mono">{rollLines.length ? '—' : bundles.length}</td>
+            <td className="py-1.5 px-2 text-right font-mono">{rollLines.length ? rollTotal : ''}</td>
+            <td className="py-1.5 px-2 text-right font-mono">{weightText}</td>
           </tr>
         </tfoot>
       </table>
@@ -117,7 +139,22 @@ export const ChallanPreview: React.FC<{ challan: DeliveryChallan; job: MaterialI
         </div>
       )}
 
-      {challan.totalOrderWeightKg > 0 && !challan.billedOnly ? (
+      {rollLines.length > 0 ? (
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-bold">
+          This challan: {rollTotal} rolls{challan.thisDispatchWeightKg > 0 ? ` • ${formatKg(challan.thisDispatchWeightKg)} kg` : ''}
+          {job.incomingWeight > 0 && (
+            <span className="font-normal text-slate-600">
+              {' '}
+              • Material received: {formatKg(job.incomingWeight)} kg ({job.coilsOrRollsCount} reels)
+            </span>
+          )}
+          {challan.billedOnly && (
+            <span className="block font-normal text-slate-600 mt-0.5">
+              Billed on this challan. At the customer's request the rolls may stay stored at our premises until collected.
+            </span>
+          )}
+        </div>
+      ) : challan.totalOrderWeightKg > 0 && !challan.billedOnly ? (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-bold">
           <span>Material received: {formatKg(challan.totalOrderWeightKg)} kg</span>
           <span>This challan: {formatKg(challan.thisDispatchWeightKg)} kg</span>
@@ -125,7 +162,10 @@ export const ChallanPreview: React.FC<{ challan: DeliveryChallan; job: MaterialI
         </div>
       ) : (
         <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-bold">
-          This challan: {formatKg(challan.thisDispatchWeightKg)} kg
+          This challan:{' '}
+          {rollLines.length
+            ? `${rollTotal} rolls${challan.thisDispatchWeightKg > 0 ? ` • ${formatKg(challan.thisDispatchWeightKg)} kg` : ''}`
+            : `${formatKg(challan.thisDispatchWeightKg)} kg`}
           {challan.billedOnly && (
             <span className="block font-normal text-slate-600 mt-0.5">
               Slit material billed on this challan. At the customer's request it may stay stored at our premises until collected.

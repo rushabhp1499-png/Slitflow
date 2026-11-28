@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useProduction } from '../context/ProductionContext';
 import { MaterialInward } from '../types';
-import { tracksWeight } from '../utils/floorPlan';
+import { isRollOrder, rollSpecLabel, rollsMade, tracksWeight } from '../utils/floorPlan';
 import {
   Lock,
   CheckCircle2,
@@ -22,8 +22,16 @@ export const PoCloseModal: React.FC<PoCloseModalProps> = ({ job, onClose }) => {
   const { closeCustomerPo } = useProduction();
 
   const tracked = tracksWeight(job);
+  // Roll-length orders: the final figure given to the customer, e.g. "750 rolls × 500 m from 10,096 kg (18 reels)".
+  const rollSummary = isRollOrder(job)
+    ? `${(job.rollSpecs || []).map((s) => `${rollsMade(job, s.id)} rolls × ${rollSpecLabel(s)}`).join(', ')}${
+        job.incomingWeight > 0 ? ` from ${job.incomingWeight.toLocaleString()} kg (${job.coilsOrRollsCount} reels)` : ''
+      }`
+    : '';
   const [closingNotes, setClosingNotes] = useState(
-    tracked
+    rollSummary
+      ? `Production complete: ${rollSummary}. PO permanently closed.`
+      : tracked
       ? `All slitted material delivered in full reconciliation. Inward raw material ${job.incomingWeight} kg fully accounted for. PO permanently closed.`
       : 'Slitting for this PO is complete and billed on its challans. PO permanently closed.'
   );
@@ -94,8 +102,15 @@ export const PoCloseModal: React.FC<PoCloseModalProps> = ({ job, onClose }) => {
 
             <div className="flex justify-between py-1 border-b border-slate-100">
               <span className="text-slate-600">Inward Raw Material Received:</span>
-              <span className="font-black text-blue-900">{tracked ? `${job.incomingWeight.toLocaleString()} kg` : 'Not given'}</span>
+              <span className="font-black text-blue-900">{job.incomingWeight > 0 ? `${job.incomingWeight.toLocaleString()} kg` : 'Not given'}</span>
             </div>
+
+            {rollSummary && (
+              <div className="flex justify-between gap-3 py-1 border-b border-slate-100">
+                <span className="text-slate-600 shrink-0">Rolls made:</span>
+                <span className="font-black text-emerald-900 text-right">{rollSummary}</span>
+              </div>
+            )}
 
             <div className="flex justify-between py-1 border-b border-slate-100">
               <span className="text-slate-600">Total Finished Dispatched:</span>

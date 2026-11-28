@@ -17,7 +17,10 @@ import {
   RequestedSlitSize,
   Machine,
   FloorStaff,
-  JobAssignment
+  JobAssignment,
+  RollSpec,
+  RollEntry,
+  ChallanRollLine
 } from '../types';
 import {
   INITIAL_JOBS,
@@ -26,7 +29,7 @@ import {
 } from '../data/mockData';
 import { supabase, getSupabase, errorMessage } from '../lib/supabase';
 import { TableSync, SyncedRow } from '../lib/tableSync';
-import { isMachineLocked, machineQueue, planOrder } from '../utils/floorPlan';
+import { isMachineLocked, machineQueue, planOrder, rollsMade, rollsOnChallans, rollSpecLabel } from '../utils/floorPlan';
 import { thicknessText } from '../utils/material';
 
 type AuthResult = { success: boolean; message: string };
@@ -99,6 +102,17 @@ interface GenerateChallanParams {
   remarks?: string;
   selectedBundleIds?: string[];
   returnedMaterial?: { weightKg: number; rolls: number; note?: string };
+}
+
+// A challan for a roll-length order: how many rolls of each length go on it; weight only if weighed.
+export interface RollChallanParams {
+  lines: { specId: string; rolls: number }[];
+  weightKg?: number;
+  last: boolean; // the last challan of the PO (everything made and sent)
+  vehicleNo: string;
+  transporterName: string;
+  eWayBillNo?: string;
+  remarks?: string;
 }
 
 interface ProductionContextType {
@@ -186,6 +200,9 @@ interface ProductionContextType {
     incomingLength: number;
     incomingWeight: number;
     coilsOrRollsCount: number;
+    orderType?: MaterialInward['orderType'];
+    coreSize?: string;
+    rollSpecs?: RollSpec[];
     bundleSpecs: BundleSpecifications;
     customerInstructions: string;
     requestedSlitSizes?: RequestedSlitSize[];
@@ -259,6 +276,10 @@ interface ProductionContextType {
   setBundleLifted: (jobId: string, bundleId: string, lifted: boolean) => void;
   // Owner/developer: link a challan to its Tally invoice number ('' clears it).
   setChallanInvoice: (jobId: string, challanId: string, invoiceNo: string) => void;
+  // Roll-length orders: log rolls made (any time, any count) and make challans by roll count.
+  addRollEntry: (jobId: string, entry: { specId: string; rolls: number; date: string; note?: string }) => void;
+  deleteRollEntry: (jobId: string, entryId: string) => void;
+  generateRollChallan: (jobId: string, params: RollChallanParams) => DeliveryChallan;
 
   // Customer Specification Change Requests & Backtrack Approval
   requestSpecChange: (
@@ -1238,6 +1259,9 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       incomingLength: Number(data.incomingLength) || 0,
       incomingWeight: Number(data.incomingWeight) || 0,
       coilsOrRollsCount: Number(data.coilsOrRollsCount) || 1,
+      ...(data.orderType === 'rolls'
+        ? { orderType: 'rolls' as const, coreSize: data.coreSize || '', rollSpecs: data.rollSpecs || [], rollEntries: [] }
+        : {}),
       bundleSpecs: data.bundleSpecs,
       customerInstructions: data.customerInstructions || 'Standard precision slitting and bundle packaging.',
       requestedSlitSizes: data.requestedSlitSizes,
@@ -1388,6 +1412,175 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     );
   };
 
+  // Challan number formatting: e.g. PE/DC/2026/001-P1 or PE/DC/2026/001, the year being today's.
+  // Continues from the highest number already issued, so deleted challans never cause duplicates.
+  const nextChallanNo = (dispatchType: 'partial' | 'final', sequenceNumber: number) => {
+    const highestChallanNum = jobs.reduce((max, j) => {
+      return (j.challans || []).reduce((m, c) => {
+        const match = c.challanNo.match(/^PE\/DC\/\d{4}\/0*(\d+)/);
+        return match ? Math.max(m, Number(match[1])) : m;
+      }, max);
+    }, 0);
+    const baseChallanNo = `PE/DC/${new Date().getFullYear()}/${String(highestChallanNum + 1).padStart(3, '0')}`;
+    return dispatchType === 'partial' ? `${baseChallanNo}-P${sequenceNumber}` : baseChallanNo;
+  };
+
+  // Roll-length orders: rolls made are logged whenever convenient (daily, or once at the end).
+  const addRollEntry: ProductionContextType['addRollEntry'] = (jobId, entry) => {
+    const nowIso = new Date().toISOString();
+    const rolls = Math.round(entry.rolls);
+    if (!(rolls > 0)) return;
+    const record: RollEntry = {
+      id: newId('roll'),
+      date: entry.date || nowIso.slice(0, 10),
+      specId: entry.specId,
+      rolls,
+      ...(entry.note?.trim() ? { note: entry.note.trim() } : {}),
+      at: nowIso,
+      by: actorName,
+    };
+    setJobs(prev =>
+      prev.map(j =>
+        j.id !== jobId
+          ? j
+          : {
+              ...j,
+              rollEntries: [...(j.rollEntries || []), record],
+              // Rolls being made means the order is on the machine.
+              ...(j.status === 'received' || j.status === 'pending_production'
+                ? { status: 'in_production' as const, productionStartedAt: j.productionStartedAt || nowIso }
+                : {}),
+              updatedAt: nowIso,
+            }
+      )
+    );
+  };
+
+  const deleteRollEntry: ProductionContextType['deleteRollEntry'] = (jobId, entryId) => {
+    const nowIso = new Date().toISOString();
+    setJobs(prev =>
+      prev.map(j =>
+        j.id !== jobId ? j : { ...j, rollEntries: (j.rollEntries || []).filter(e => e.id !== entryId), updatedAt: nowIso }
+      )
+    );
+  };
+
+  // A challan for a roll-length order: any number of rolls up to what is made and not yet on a challan.
+  const generateRollChallan: ProductionContextType['generateRollChallan'] = (jobId, params) => {
+    const job = jobs.find(j => j.id === jobId);
+    if (!job) throw new Error('Order not found');
+    const customer = customers.find(c => c.id === job.customerId);
+    const specs = job.rollSpecs || [];
+
+    const lines: ChallanRollLine[] = [];
+    for (const l of params.lines) {
+      const rolls = Math.round(l.rolls);
+      if (!(rolls > 0)) continue;
+      const spec = specs.find(s => s.id === l.specId);
+      if (!spec) throw new Error('Unknown roll size on this challan.');
+      const available = rollsMade(job, spec.id) - rollsOnChallans(job, spec.id);
+      if (rolls > available) {
+        throw new Error(`Only ${available} roll(s) of ${rollSpecLabel(spec)} are made and not yet on a challan.`);
+      }
+      lines.push({ specId: spec.id, lengthM: spec.lengthM, ...(spec.widthMm ? { widthMm: spec.widthMm } : {}), rolls });
+    }
+    if (lines.length === 0) throw new Error('Enter how many rolls go on this challan.');
+
+    const sequenceNumber = (job.challans?.length || 0) + 1;
+    const dispatchType: 'partial' | 'final' = params.last ? 'final' : 'partial';
+    const challanNo = nextChallanNo(dispatchType, sequenceNumber);
+    const nowIso = new Date().toISOString();
+    const weightKg = Math.max(0, Number(params.weightKg) || 0);
+    const totalRolls = lines.reduce((s, l) => s + l.rolls, 0);
+    const core = job.coreSize ? `, ${job.coreSize} core` : '';
+    const challanId = 'dc-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+    const dispatchedSoFar = (job.dispatchedWeightKg || 0) + weightKg;
+
+    const newChallan: DeliveryChallan = {
+      id: challanId,
+      challanNo,
+      challanDate: nowIso.slice(0, 10),
+      jobId: job.id,
+      customerPoNo: job.customerPoNo,
+      customerId: job.customerId,
+      customerName: job.customerName,
+      customerRegisteredAddress: customer?.registeredAddress || job.customerRegisteredAddress,
+      customerDeliveryAddress: customer?.plantAddress || customer?.registeredAddress || job.customerRegisteredAddress || '',
+      customerGst: job.customerGst,
+      dispatchType,
+      dispatchSequenceNumber: sequenceNumber,
+      totalOrderWeightKg: job.incomingWeight,
+      thisDispatchWeightKg: weightKg,
+      remainingBalanceWeightKg: 0,
+      billedOnly: customer?.keepsStock ? true : undefined,
+      vehicleNo: (params.vehicleNo || '').trim().toUpperCase() || job.vehicleNo || '—',
+      transporterName: params.transporterName || '',
+      eWayBillNo: params.eWayBillNo || '',
+      incomingChallanRef: `${job.inwardChallanNo} dated ${job.receivedDate}`,
+      items: lines.map((l, i) => ({
+        srNo: i + 1,
+        description: `${job.grade} rolls – ${rollSpecLabel(l)}${core}`,
+        grade: job.grade,
+        thickness: thicknessText(job),
+        slitWidthsSummary: rollSpecLabel(l),
+        incomingWeightKg: job.incomingWeight,
+        dispatchedWeightKg: 0,
+        scrapWeightKg: 0,
+        bundlesCount: 0,
+        unitType: 'reels',
+        unitsPerBundle: 0,
+        bundleWeightApproxKg: 0,
+        remarks: `${l.rolls} rolls`,
+      })),
+      rollLines: lines,
+      totalBundles: 0,
+      totalNetWeightKg: weightKg,
+      totalScrapWeightKg: 0,
+      totalGrossWeightKg: weightKg,
+      version: 1,
+      revisionLabel: 'Original',
+      isLatest: true,
+      terms: [
+        `${dispatchType === 'partial' ? `PART DELIVERY CHALLAN (${sequenceNumber})` : 'FINAL DELIVERY CHALLAN'} against customer Purchase Order ${job.customerPoNo}: ${totalRolls} rolls.`,
+        'Goods processed and returned under Rule 55 of CGST Rules 2017 for Job-Work transactions.',
+        'Subject to Bhiwandi / Thane jurisdiction only.',
+      ],
+      savedToDrive: false,
+      emailSent: false,
+      sentToEmails: [],
+      preparedBy: actorName,
+      status: 'dispatched',
+    };
+
+    setJobs(prev =>
+      prev.map(j =>
+        j.id !== jobId
+          ? j
+          : {
+              ...j,
+              status: dispatchType === 'final' ? 'dispatched' : 'partially_dispatched',
+              poStatus: dispatchType === 'final' ? j.poStatus : 'partially_dispatched',
+              dispatchedWeightKg: dispatchedSoFar,
+              challan: newChallan,
+              challans: [...(j.challans || []), newChallan],
+              updatedAt: nowIso,
+            }
+      )
+    );
+
+    addNotification(
+      job.id,
+      job.jobNo,
+      job.customerId,
+      job.customerName,
+      dispatchType === 'partial' ? 'partial_dispatch' : 'challan_generated',
+      `Challan #${challanNo}: ${totalRolls} rolls`,
+      `Challan #${challanNo} issued to ${job.customerName}: ${lines.map(l => `${l.rolls} × ${rollSpecLabel(l)}`).join(', ')}.`
+    );
+
+    return newChallan;
+  };
+
   // Generate Delivery Challan with Partial Dispatch midway support
   const generateDeliveryChallan = (jobId: string, params: GenerateChallanParams) => {
     const job = jobs.find(j => j.id === jobId);
@@ -1397,18 +1590,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const existingChallansCount = job.challans ? job.challans.length : (job.challan ? 1 : 0);
     const sequenceNumber = existingChallansCount + 1;
     
-    // Challan number formatting: e.g. PE/DC/2026/001-P1 or PE/DC/2026/001, the year being today's.
-    // Continues from the highest number already issued, so deleted challans never cause duplicates.
-    const highestChallanNum = jobs.reduce((max, j) => {
-      return (j.challans || []).reduce((m, c) => {
-        const match = c.challanNo.match(/^PE\/DC\/\d{4}\/0*(\d+)/);
-        return match ? Math.max(m, Number(match[1])) : m;
-      }, max);
-    }, 0);
-    const baseChallanNo = `PE/DC/${new Date().getFullYear()}/${String(highestChallanNum + 1).padStart(3, '0')}`;
-    const challanNo = params.dispatchType === 'partial'
-      ? `${baseChallanNo}-P${sequenceNumber}`
-      : baseChallanNo;
+    const challanNo = nextChallanNo(params.dispatchType, sequenceNumber);
 
     const todayStr = new Date().toISOString().split('T')[0];
     const nowIso = new Date().toISOString();
@@ -1885,14 +2067,17 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         const newRemaining = reconciled.remainingWeightKg;
         const updatedBundles = reconciled.bundles;
 
+        // Roll challans may carry no weight, so for those any remaining challan counts as sent.
+        const anySent =
+          newTotalDispatched > 0 || (job.orderType === 'rolls' && updatedChallans.some(c => !c.isSuperseded));
         const newStatus: ProductionStatus =
-          newTotalDispatched > 0
+          anySent
             ? 'partially_dispatched'
             : job.outputDetails
             ? 'slitting_completed'
             : 'in_production';
 
-        const newPoStatus = newTotalDispatched > 0 ? 'partially_dispatched' : 'open';
+        const newPoStatus = anySent ? 'partially_dispatched' : 'open';
 
         return {
           ...job,
@@ -2503,6 +2688,9 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         isAdmin,
         setBundleLifted,
         setChallanInvoice,
+        addRollEntry,
+        deleteRollEntry,
+        generateRollChallan,
         adminUpdateOrder,
         deleteOrder,
         deleteCustomer,

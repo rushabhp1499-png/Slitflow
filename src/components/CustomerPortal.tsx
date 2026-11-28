@@ -3,7 +3,7 @@ import { useProduction } from '../context/ProductionContext';
 import { MaterialInward, ProductionStatus, DeliveryChallan } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { SIZE_MASTER_URL } from '../utils/sizeMaster';
-import { tracksWeight } from '../utils/floorPlan';
+import { isRollOrder, orderProgress, rollSpecLabel, rollsMade, rollsOnChallans, tracksWeight } from '../utils/floorPlan';
 import { sizeText, thicknessText } from '../utils/material';
 import {
   Building2,
@@ -157,7 +157,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
   // Customers who keep their material with us are billed monthly for what was slit; no stock balance is shown.
   const keepsStock = !!currentCustomer?.keepsStock;
   const sentLabel = keepsStock ? 'Billed' : 'Dispatched';
-  const weightText = (j: MaterialInward) => (tracksWeight(j) ? `${j.incomingWeight.toLocaleString()} kg` : 'Not given');
+  const weightText = (j: MaterialInward) => (j.incomingWeight > 0 ? `${j.incomingWeight.toLocaleString()} kg` : 'Not given');
   const challansList = activeJob?.challans && activeJob.challans.length > 0
     ? activeJob.challans
     : activeJob?.challan
@@ -367,6 +367,10 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                         {weightText(job)}
                       </span>
                     </div>
+
+                    {isRollOrder(job) && (
+                      <div className="text-[11px] text-blue-800 font-semibold mt-1">{orderProgress(job).label}</div>
+                    )}
 
                     {/* Dispatched info */}
                     {(job.dispatchedWeightKg || 0) > 0 && (
@@ -834,7 +838,29 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                 </div>
               )}
 
-              {/* LIVE BUNDLE WEIGHING SCALE LEDGER (Floor Updates) */}
+              {/* Roll-length orders: the running roll count instead of the bundle ledger */}
+              {isRollOrder(activeJob) ? (
+                <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
+                    <Scale className="w-4 h-4 text-blue-600" />
+                    Rolls made: {orderProgress(activeJob).label}
+                  </span>
+                  <div className="grid gap-1.5 text-xs">
+                    {(activeJob.rollSpecs || []).map((s) => (
+                      <div key={s.id} className="flex justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                        <span className="font-semibold">
+                          {rollSpecLabel(s)}
+                          {activeJob.coreSize ? `, ${activeJob.coreSize} core` : ''}
+                        </span>
+                        <span className="font-mono">
+                          <b>{rollsMade(activeJob, s.id)}</b>
+                          {s.targetRolls ? ` of ${s.targetRolls}` : ''} made • {rollsOnChallans(activeJob, s.id)} on challans
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
               <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-2xs space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 pb-2.5 gap-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
@@ -1000,6 +1026,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                   </div>
                 )}
               </div>
+              )}
 
               {/* Delivery Challans History Section */}
               {challansList.length > 0 && (

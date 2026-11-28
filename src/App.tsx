@@ -11,6 +11,8 @@ import { EddModal } from './components/EddModal';
 import { SlittingOutputModal } from './components/SlittingOutputModal';
 import { DeliveryChallanModal } from './components/DeliveryChallanModal';
 import { BundleWeighingModal } from './components/BundleWeighingModal';
+import { RollCountModal } from './components/RollCountModal';
+import { isRollOrder } from './utils/floorPlan';
 import { NotificationsDrawer } from './components/NotificationsDrawer';
 import { CustomerManagementModal } from './components/CustomerManagementModal';
 import { PoCloseModal } from './components/PoCloseModal';
@@ -361,12 +363,15 @@ function MainAppContent() {
         />
       )}
 
-      {selectedJobForBundleWeighing && (
-        <BundleWeighingModal
-          job={selectedJobForBundleWeighing}
-          onClose={() => setSelectedJobForBundleWeighing(null)}
-        />
-      )}
+      {selectedJobForBundleWeighing &&
+        (isRollOrder(selectedJobForBundleWeighing) ? (
+          <RollCountModal job={selectedJobForBundleWeighing} onClose={() => setSelectedJobForBundleWeighing(null)} />
+        ) : (
+          <BundleWeighingModal
+            job={selectedJobForBundleWeighing}
+            onClose={() => setSelectedJobForBundleWeighing(null)}
+          />
+        ))}
 
       {isNotifDrawerOpen && (
         <NotificationsDrawer
