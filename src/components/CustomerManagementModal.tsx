@@ -186,13 +186,15 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
                 Registered Clients ({customers.length})
               </span>
-              <button
-                type="button"
-                onClick={() => setIsAddingCustomer(true)}
-                className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
-              >
-                <Plus className="w-3.5 h-3.5" /> Add New
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCustomer(true)}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add New
+                </button>
+              )}
             </div>
 
             <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
@@ -377,7 +379,13 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
                 {tab === 'orders' ? (
                   <CustomerOrdersPanel customer={selectedCustomer} />
                 ) : (
-                <div className="space-y-6">
+                // Only the owner and developer can add or change customers; others see the details read-only.
+                <fieldset disabled={!isAdmin} className="space-y-6 min-w-0">
+                {!isAdmin && (
+                  <p className="text-xs font-semibold text-slate-700 bg-slate-100 border border-slate-200 rounded-lg p-2.5">
+                    View only. Customers can be added or changed by Top Management or the Developer login.
+                  </p>
+                )}
 
                 {/* Top Quick Actions Bar */}
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50/40 border border-blue-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -634,7 +642,7 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
                   </div>
                 )}
 
-                </div>
+                </fieldset>
                 )}
               </div>
             ) : (
@@ -642,8 +650,11 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
                 <Users className="w-8 h-8 text-slate-300" />
                 <p className="text-sm font-bold text-slate-700">No customers yet</p>
                 <p className="text-xs text-slate-500 max-w-xs">
-                  Add your first customer company and the email IDs allowed to track its orders.
+                  {isAdmin
+                    ? 'Add your first customer company and the email IDs allowed to track its orders.'
+                    : 'Customers are added by Top Management or the Developer login.'}
                 </p>
+                {isAdmin && (
                 <button
                   type="button"
                   onClick={() => setIsAddingCustomer(true)}
@@ -651,6 +662,7 @@ export const CustomerManagementModal: React.FC<CustomerManagementModalProps> = (
                 >
                   <Plus className="w-3.5 h-3.5" /> Add New Customer
                 </button>
+                )}
               </div>
             )}
           </div>

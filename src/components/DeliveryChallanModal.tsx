@@ -5,6 +5,7 @@ import { COMPANY_INFO } from '../data/mockData';
 import { companyContactLine } from '../config/company';
 import { downloadChallanPdf, printChallanPdf } from '../utils/challanExport';
 import { ChallanPreview } from './ChallanPreview';
+import { InvoiceCell } from './InvoiceCell';
 import { tracksWeight } from '../utils/floorPlan';
 import { gradeText } from '../utils/material';
 import { WhatsAppDispatchModal } from './WhatsAppDispatchModal';
@@ -1022,6 +1023,7 @@ ${companyContactLine()}`;
                   <span className="text-[11px] text-slate-500 font-mono">
                     ({activeChallan.thisDispatchWeightKg.toLocaleString()} kg • {activeChallan.totalBundles} bundles)
                   </span>
+                  {!activeChallan.isSuperseded && <InvoiceCell jobId={job.id} challan={activeChallan} />}
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">

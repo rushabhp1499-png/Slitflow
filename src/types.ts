@@ -226,6 +226,10 @@ export interface DeliveryChallan {
   remainingBalanceWeightKg: number; // e.g. 752 kg remaining in factory
   // Keeps-stock customer: bills what was slit; the bundles may stay stored with us until lifted.
   billedOnly?: boolean;
+  // Tally invoice this challan was billed on (one invoice may cover several challans)
+  invoiceNo?: string;
+  invoicedAt?: string;
+  invoicedBy?: string;
   
   vehicleNo: string;
   transporterName: string;

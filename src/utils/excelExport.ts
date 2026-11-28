@@ -73,6 +73,7 @@ export async function exportJobsToExcel(jobs: MaterialInward[], machines: Machin
         return {
           'Challan No': c.challanNo,
           Date: day(c.challanDate),
+          'Invoice No': c.invoiceNo || '',
           'PO No': c.customerPoNo || j.customerPoNo,
           Customer: c.customerName,
           Vehicle: c.vehicleNo,

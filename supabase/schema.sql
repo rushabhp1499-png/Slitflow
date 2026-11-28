@@ -804,6 +804,12 @@ begin
     if oc is null then
       perform write_audit('challan_created', 'challan', c ->> 'id', po,
         'Challan ' || (c ->> 'challanNo') || ' created: ' || coalesce(c ->> 'thisDispatchWeightKg', '?') || ' kg');
+    elsif (oc - 'invoiceNo' - 'invoicedAt' - 'invoicedBy') = (c - 'invoiceNo' - 'invoicedAt' - 'invoicedBy')
+          and (oc ->> 'invoiceNo') is distinct from (c ->> 'invoiceNo') then
+      perform write_audit('challan_invoiced', 'challan', c ->> 'id', po,
+        case when nullif(c ->> 'invoiceNo', '') is null
+          then 'Invoice number removed from challan ' || (c ->> 'challanNo')
+          else 'Invoice ' || (c ->> 'invoiceNo') || ' linked to challan ' || (c ->> 'challanNo') end);
     elsif oc <> c then
       perform write_audit('challan_edited', 'challan', c ->> 'id', po,
         'Challan ' || (c ->> 'challanNo') || ' changed after it was generated',
@@ -1181,6 +1187,16 @@ $$;
 drop trigger if exists customers_before_delete on public.customers;
 create trigger customers_before_delete before delete on public.customers
 for each row execute function public.customers_before_delete();
+
+-- Customers: only the owner and developer can add or change them (the production manager can view).
+drop policy if exists customers_staff_insert on public.customers;
+drop policy if exists customers_admin_insert on public.customers;
+create policy customers_admin_insert on public.customers for insert to authenticated
+  with check (public.is_admin());
+drop policy if exists customers_staff_update on public.customers;
+drop policy if exists customers_admin_update on public.customers;
+create policy customers_admin_update on public.customers for update to authenticated
+  using (public.is_admin()) with check (public.is_admin());
 
 -- Factory logins: owner and developer can add, change and remove them.
 grant insert, update, delete on public.staff_emails to authenticated;

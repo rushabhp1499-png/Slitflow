@@ -38,6 +38,7 @@ import {
   KeyRound
 } from 'lucide-react';
 import { EditOrderModal } from './EditOrderModal';
+import { InvoiceCell } from './InvoiceCell';
 import { sizeText } from '../utils/material';
 import { UsersModal } from './UsersModal';
 
@@ -200,6 +201,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
       job.vehicleNo,
       customer?.email,
       ...(job.challans || []).map((c) => c.challanNo),
+      ...(job.challans || []).map((c) => c.invoiceNo),
     ];
     const matchesSearch = !query || fields.some((f) => (f || '').toLowerCase().includes(query));
 
@@ -701,7 +703,7 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
-              placeholder="Search by PO number (or job, customer, challan, vehicle)..."
+              placeholder="Search PO, customer, challan or invoice no..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-600"
@@ -1149,6 +1151,23 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                             )}
                           </div>
 
+                          {/* Owner / developer: challans still waiting for their Tally invoice number */}
+                          {isAdmin && (() => {
+                            const toInvoice = (job.challans || []).filter((c) => !c.isSuperseded && !c.invoiceNo).length;
+                            return toInvoice > 0 ? (
+                              <div>
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedJobId(job.id)}
+                                  className="text-[11px] font-bold text-blue-800 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md hover:bg-blue-100"
+                                  title="Show the challans to enter their invoice numbers"
+                                >
+                                  {toInvoice} to invoice
+                                </button>
+                              </div>
+                            ) : null;
+                          })()}
+
                           {/* Close PO / Reopen PO Button - Fixed and always accessible */}
                           <div>
                             {isPermanentlyClosed ? (
@@ -1393,6 +1412,11 @@ export const FactoryDashboard: React.FC<FactoryDashboardProps> = ({
                                           <div className="text-[11px] text-slate-500 mt-0.5">
                                             {ch.thisDispatchWeightKg} kg in {ch.totalBundles} bundles ({ch.vehicleNo})
                                           </div>
+                                          {!ch.isSuperseded && (
+                                            <div className="mt-1.5">
+                                              <InvoiceCell jobId={job.id} challan={ch} />
+                                            </div>
+                                          )}
                                         </div>
                                         <button
                                           type="button"

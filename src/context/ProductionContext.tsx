@@ -257,6 +257,8 @@ interface ProductionContextType {
   voidBundleInJob: (jobId: string, bundleId: string, reason: string, voidedBy?: string) => void;
   // Keeps-stock customers: mark a billed bundle as collected (or undo). Optional bookkeeping only.
   setBundleLifted: (jobId: string, bundleId: string, lifted: boolean) => void;
+  // Owner/developer: link a challan to its Tally invoice number ('' clears it).
+  setChallanInvoice: (jobId: string, challanId: string, invoiceNo: string) => void;
 
   // Customer Specification Change Requests & Backtrack Approval
   requestSpecChange: (
@@ -1093,6 +1095,29 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
                   ? { ...b, liftedAt: nowIso, liftedBy: actorName }
                   : { ...b, liftedAt: undefined, liftedBy: undefined }
               ),
+              updatedAt: nowIso,
+            }
+      )
+    );
+  };
+
+  const setChallanInvoice: ProductionContextType['setChallanInvoice'] = (jobId, challanId, invoiceNo) => {
+    const nowIso = new Date().toISOString();
+    const clean = invoiceNo.trim();
+    const link = (c: DeliveryChallan): DeliveryChallan =>
+      c.id !== challanId
+        ? c
+        : clean
+        ? { ...c, invoiceNo: clean, invoicedAt: nowIso, invoicedBy: actorName }
+        : { ...c, invoiceNo: undefined, invoicedAt: undefined, invoicedBy: undefined };
+    setJobs(prev =>
+      prev.map(j =>
+        j.id !== jobId
+          ? j
+          : {
+              ...j,
+              challans: (j.challans || []).map(link),
+              challan: j.challan ? link(j.challan) : j.challan,
               updatedAt: nowIso,
             }
       )
@@ -2477,6 +2502,7 @@ export const ProductionProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         staffRole,
         isAdmin,
         setBundleLifted,
+        setChallanInvoice,
         adminUpdateOrder,
         deleteOrder,
         deleteCustomer,
