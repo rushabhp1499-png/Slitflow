@@ -28,10 +28,29 @@ const dateTime = (iso: string | undefined) => {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 };
 
+type XlsxLib = typeof import('xlsx');
+type Book = ReturnType<XlsxLib['utils']['book_new']>;
+
+// Adds a sheet with column widths from the longest value, capped so notes don't make huge columns.
+export function addReadableSheet(XLSX: XlsxLib, book: Book, rows: Record<string, unknown>[], name: string, header: string[]) {
+  const sheet = XLSX.utils.json_to_sheet(rows, { header });
+  sheet['!cols'] = header.map((h) => ({
+    wch: Math.min(45, Math.max(h.length, ...rows.map((r) => String(r[h] ?? '').length)) + 2),
+  }));
+  XLSX.utils.book_append_sheet(book, sheet, name);
+}
+
 // One workbook with three sheets: orders, challans, bundles. Everything comes from the database rows already loaded.
 export async function exportJobsToExcel(jobs: MaterialInward[], machines: Machine[], staff: FloorStaff[]) {
   // Loaded only when someone exports, so the dashboard doesn't carry it.
   const XLSX = await import('xlsx');
+  const book = XLSX.utils.book_new();
+  addJobSheets(XLSX, book, jobs, machines, staff);
+  const stamp = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(book, `SlitFlow-orders-${stamp}.xlsx`);
+}
+
+export function addJobSheets(XLSX: XlsxLib, book: Book, jobs: MaterialInward[], machines: Machine[], staff: FloorStaff[]) {
   const machineName = (id?: string) => machines.find((m) => m.id === id)?.number || '';
   const staffName = (id?: string) => staff.find((s) => s.id === id)?.name || '';
   const sorted = [...jobs].sort((a, b) => (b.receivedDate || '').localeCompare(a.receivedDate || ''));
@@ -113,19 +132,7 @@ export async function exportJobsToExcel(jobs: MaterialInward[], machines: Machin
       }))
   );
 
-  const book = XLSX.utils.book_new();
-  const addSheet = (rows: Record<string, unknown>[], name: string, header: string[]) => {
-    const sheet = XLSX.utils.json_to_sheet(rows, { header });
-    // Column widths from the longest value, capped so notes don't make huge columns
-    sheet['!cols'] = header.map((h) => ({
-      wch: Math.min(45, Math.max(h.length, ...rows.map((r) => String(r[h] ?? '').length)) + 2),
-    }));
-    XLSX.utils.book_append_sheet(book, sheet, name);
-  };
-  addSheet(orders, 'Orders', Object.keys(orders[0] || { 'PO No': '' }));
-  addSheet(challans, 'Challans', Object.keys(challans[0] || { 'Challan No': '' }));
-  addSheet(bundles, 'Bundles', Object.keys(bundles[0] || { 'PO No': '' }));
-
-  const stamp = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(book, `SlitFlow-orders-${stamp}.xlsx`);
+  addReadableSheet(XLSX, book, orders, 'Orders', Object.keys(orders[0] || { 'PO No': '' }));
+  addReadableSheet(XLSX, book, challans, 'Challans', Object.keys(challans[0] || { 'Challan No': '' }));
+  addReadableSheet(XLSX, book, bundles, 'Bundles', Object.keys(bundles[0] || { 'PO No': '' }));
 }

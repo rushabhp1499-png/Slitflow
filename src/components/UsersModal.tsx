@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useProduction, LoginInfo } from '../context/ProductionContext';
 import { getSupabase, errorMessage } from '../lib/supabase';
-import { X, KeyRound, Trash2, UserPlus } from 'lucide-react';
+import { X, KeyRound, Trash2, UserPlus, Download, Upload } from 'lucide-react';
 
 interface UsersModalProps {
   onClose: () => void;
@@ -51,6 +51,8 @@ export const UsersModal: React.FC<UsersModalProps> = ({ onClose }) => {
     try {
       const err = await work();
       setMessage(err || done);
+    } catch (e) {
+      setMessage(errorMessage(e));
     } finally {
       setBusy(false);
       void load();
@@ -135,6 +137,34 @@ export const UsersModal: React.FC<UsersModalProps> = ({ onClose }) => {
       return r.success ? null : r.message;
     }, `${email} removed.`);
   };
+
+  const backupNow = () =>
+    run(async () => {
+      const { downloadFullBackup } = await import('../utils/backup');
+      return downloadFullBackup(); // shown as the message
+    }, '');
+
+  const restoreFrom = (file: File) =>
+    run(async () => {
+      const { checkRestore, writeRestore } = await import('../utils/backup');
+      const { backup, missing, changed } = await checkRestore(file);
+      if (!missing.length && !changed.length) return `Nothing to restore: the portal already matches this backup (${backup.length} records).`;
+      const addOk =
+        missing.length > 0 &&
+        window.confirm(`${missing.length} record(s) in the backup are missing from the portal (deleted or lost).\n\nAdd them back?`);
+      const replaceOk =
+        changed.length > 0 &&
+        window.confirm(
+          `${changed.length} record(s) are different in the portal now than in the backup.\n\n` +
+            'Replace them with the backup copy? Any changes made after the backup was taken will be LOST.\n\n' +
+            'Click Cancel to keep the portal versions (safe).'
+        );
+      if (!addOk && !replaceOk) return 'Restore cancelled. Nothing was changed.';
+      const problems = await writeRestore(addOk ? missing : [], replaceOk ? changed : []);
+      if (problems.length) return `Restore finished with ${problems.length} problem(s): ${problems.slice(0, 3).join(' | ')}`;
+      window.setTimeout(() => window.location.reload(), 1500);
+      return `Restored: ${addOk ? missing.length : 0} added back, ${replaceOk ? changed.length : 0} replaced. Reloading…`;
+    }, '');
 
   const input = 'px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm';
   const loginBadge = (email: string) => {
@@ -254,6 +284,33 @@ export const UsersModal: React.FC<UsersModalProps> = ({ onClose }) => {
             </form>
             <p className="mt-1.5 text-[11px] text-slate-500">
               They get an email with a link and choose their own password. Nobody else sees it.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Backup</h3>
+            <div className="flex flex-wrap gap-2">
+              <button disabled={busy} onClick={() => void backupNow()} className="px-3 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold flex items-center gap-1">
+                <Download className="w-4 h-4" /> Download full backup (Excel)
+              </button>
+              <label className={`px-3 py-2 border border-slate-300 rounded-lg text-xs font-bold flex items-center gap-1 ${busy ? 'opacity-50' : 'cursor-pointer hover:bg-slate-50'}`}>
+                <Upload className="w-4 h-4" /> Restore from backup…
+                <input
+                  type="file"
+                  accept=".xlsx"
+                  disabled={busy}
+                  className="hidden"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    e.target.value = '';
+                    if (f) void restoreFrom(f);
+                  }}
+                />
+              </label>
+            </div>
+            <p className="mt-1.5 text-[11px] text-slate-500">
+              Every order, challan, customer, machine and staff record in one file. Take one every Saturday and save it in OneDrive.
+              Restore asks before changing anything. Logins and passwords are not in the file; re-send invites if ever needed.
             </p>
           </section>
         </div>
